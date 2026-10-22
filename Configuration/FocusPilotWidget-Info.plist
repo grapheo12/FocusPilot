@@ -18,6 +18,8 @@
 	<string>1.1.1</string>
 	<key>CFBundleVersion</key>
 	<string>4</string>
+	<key>FocusPilotAppGroupIdentifier</key>
+	<string>$(FOCUSPILOT_APP_GROUP)</string>
 	<key>NSExtension</key>
 	<dict>
 		<key>NSExtensionPointIdentifier</key>

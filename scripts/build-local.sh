@@ -24,6 +24,7 @@ xcodebuild \
   DEVELOPMENT_TEAM="${TEAM_ID}" \
   CODE_SIGNING_ALLOWED=YES \
   CODE_SIGN_STYLE=Automatic \
+  FOCUSPILOT_APP_GROUP="${TEAM_ID}.com.focuspilot.shared" \
   REGISTER_APP_GROUPS=YES \
   build
 

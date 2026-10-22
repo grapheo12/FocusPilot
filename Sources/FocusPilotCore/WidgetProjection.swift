@@ -12,10 +12,16 @@ public enum WidgetProjectionStoreError: LocalizedError, Equatable {
 }
 
 public enum WidgetProjectionStore {
-    public static let appGroupIdentifier = "group.com.focuspilot.shared"
+    public static let defaultAppGroupIdentifier = "group.com.focuspilot.shared"
     public static let filename = "widget-projection.json"
 
-    public static func projectionURL(fileManager: FileManager = .default) throws -> URL {
+    public static func projectionURL(
+        fileManager: FileManager = .default,
+        bundle: Bundle = .main
+    ) throws -> URL {
+        let appGroupIdentifier = bundle.object(
+            forInfoDictionaryKey: "FocusPilotAppGroupIdentifier"
+        ) as? String ?? defaultAppGroupIdentifier
         guard let container = fileManager.containerURL(
             forSecurityApplicationGroupIdentifier: appGroupIdentifier
         ) else {
@@ -26,9 +32,14 @@ public enum WidgetProjectionStore {
 
     public static func write(
         _ projection: WidgetProjection,
-        fileManager: FileManager = .default
+        fileManager: FileManager = .default,
+        bundle: Bundle = .main
     ) throws {
-        try write(projection, to: projectionURL(fileManager: fileManager), fileManager: fileManager)
+        try write(
+            projection,
+            to: projectionURL(fileManager: fileManager, bundle: bundle),
+            fileManager: fileManager
+        )
     }
 
     public static func write(
@@ -46,8 +57,11 @@ public enum WidgetProjectionStore {
         try encoder.encode(projection).write(to: url, options: .atomic)
     }
 
-    public static func read(fileManager: FileManager = .default) throws -> WidgetProjection {
-        try read(from: projectionURL(fileManager: fileManager))
+    public static func read(
+        fileManager: FileManager = .default,
+        bundle: Bundle = .main
+    ) throws -> WidgetProjection {
+        try read(from: projectionURL(fileManager: fileManager, bundle: bundle))
     }
 
     public static func read(from url: URL) throws -> WidgetProjection {

@@ -26,14 +26,14 @@ targets:
       properties:
         CFBundleShortVersionString: "1.1.1"
         CFBundleVersion: "4"
+        FocusPilotAppGroupIdentifier: $(FOCUSPILOT_APP_GROUP)
         NSCalendarsFullAccessUsageDescription: FocusPilot reads your calendar to avoid scheduling tasks during existing events and to suggest available focus time.
     entitlements:
       path: Configuration/FocusPilot.entitlements
       properties:
         com.apple.security.application-groups:
-          - group.com.focuspilot.shared
+          - $(FOCUSPILOT_APP_GROUP)
         com.apple.security.personal-information.calendars: true
-        com.apple.developer.usernotifications.time-sensitive: true
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.focuspilot.mac
@@ -42,6 +42,7 @@ targets:
         CODE_SIGN_STYLE: Automatic
         ENABLE_HARDENED_RUNTIME: YES
         ENABLE_USER_SCRIPT_SANDBOXING: NO
+        FOCUSPILOT_APP_GROUP: group.com.focuspilot.shared
         REGISTER_APP_GROUPS: YES
         SWIFT_VERSION: 6.0
   FocusPilotWidget:
@@ -57,6 +58,7 @@ targets:
       properties:
         CFBundleShortVersionString: "1.1.1"
         CFBundleVersion: "4"
+        FocusPilotAppGroupIdentifier: $(FOCUSPILOT_APP_GROUP)
         NSExtension:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
     entitlements:
@@ -64,13 +66,14 @@ targets:
       properties:
         com.apple.security.app-sandbox: true
         com.apple.security.application-groups:
-          - group.com.focuspilot.shared
+          - $(FOCUSPILOT_APP_GROUP)
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.focuspilot.mac.widget
         PRODUCT_NAME: FocusPilotWidget
         CODE_SIGNING_ALLOWED: YES
         CODE_SIGN_STYLE: Automatic
+        FOCUSPILOT_APP_GROUP: group.com.focuspilot.shared
         REGISTER_APP_GROUPS: YES
         SKIP_INSTALL: YES
         SWIFT_VERSION: 6.0

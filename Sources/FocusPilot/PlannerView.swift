@@ -22,9 +22,9 @@ struct PlannerView: View {
             }
 
             List {
-                if !model.state.approvedBlocks.isEmpty {
+                if !model.approvedBlocksForPlan.isEmpty {
                     Section("Approved") {
-                        ForEach(model.state.approvedBlocks.values.sorted { $0.start < $1.start }) { block in
+                        ForEach(model.approvedBlocksForPlan.sorted { $0.start < $1.start }) { block in
                             HStack {
                                 BlockRow(
                                     title: block.title,
@@ -72,7 +72,7 @@ struct PlannerView: View {
                 }
             }
             .overlay {
-                if model.proposals.isEmpty && model.state.approvedBlocks.isEmpty {
+                if model.proposals.isEmpty && model.approvedBlocksForPlan.isEmpty {
                     ContentUnavailableView(
                         "No plan yet",
                         systemImage: "calendar.badge.clock",

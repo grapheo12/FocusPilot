@@ -131,3 +131,56 @@ func autoStartPolicyTrimsLateTimeAndRejectsExpiredBlocks() {
     #expect(AutoStartPolicy.remainingActiveSeconds(for: second, at: now) == 300)
     #expect(AutoStartPolicy.remainingActiveSeconds(for: expired, at: now) == nil)
 }
+
+@Test
+func completedAndDeletedTasksAreRemovedFromPlanVisibility() {
+    let activeTask = TaskItem(title: "Active")
+    let completedTask = TaskItem(title: "Done", isCompleted: true)
+    let deletedTaskID = UUID()
+    let now = Date(timeIntervalSince1970: 10_000)
+    let activeBlock = ApprovedBlock(
+        taskID: activeTask.id,
+        title: activeTask.title,
+        start: now,
+        end: now.addingTimeInterval(3_600),
+        activeMinutes: 55,
+        kind: .task
+    )
+    let completedBlock = ApprovedBlock(
+        taskID: completedTask.id,
+        title: completedTask.title,
+        start: now,
+        end: now.addingTimeInterval(3_600),
+        activeMinutes: 55,
+        kind: .task
+    )
+    let deletedBlock = ApprovedBlock(
+        taskID: deletedTaskID,
+        title: "Deleted",
+        start: now,
+        end: now.addingTimeInterval(3_600),
+        activeMinutes: 55,
+        kind: .task
+    )
+    let deepBlock = ApprovedBlock(
+        taskID: nil,
+        title: "Deep thinking",
+        start: now,
+        end: now.addingTimeInterval(7_200),
+        activeMinutes: 105,
+        kind: .deepThinking
+    )
+    let state = AppState(
+        tasks: [activeTask.id: activeTask, completedTask.id: completedTask],
+        approvedBlocks: [
+            activeBlock.id: activeBlock,
+            completedBlock.id: completedBlock,
+            deletedBlock.id: deletedBlock,
+            deepBlock.id: deepBlock
+        ]
+    )
+
+    let visibleIDs = Set(PlanVisibility.approvedBlocks(in: state).map(\.id))
+
+    #expect(visibleIDs == [activeBlock.id, deepBlock.id])
+}

@@ -41,6 +41,7 @@ FocusPilot is productivity software, not a diagnostic or medical tool.
 - Include planned five-minute breaks when calculating wall-clock block lengths.
 - Edit the start and end times of approved task and deep-thinking blocks.
 - Automatically start every due approved block, including overlaps, while FocusPilot is running.
+- Remove a task's approved blocks from the plan and stop its active timer when the task is completed.
 
 ### Focus and break reminders
 
@@ -122,7 +123,7 @@ macOS does not support third-party Mac lock-screen widgets. Lock-screen presenta
 9. Choose an empty folder for the separate encrypted vault repository.
 10. Export the recovery key from Settings and store it somewhere outside both repositories.
 
-The widget and containing app must be signed by the same Apple Developer team. FocusPilot no longer creates an ad-hoc build that appears to contain a widget but cannot reliably access its shared App Group container.
+The widget and containing app must be signed by the same Apple Developer team. The local build script uses the macOS Team-ID-prefixed App Group supported by Personal Teams; release builds can use the registered `group.com.focuspilot.shared` identifier. Personal Teams do not support the Time Sensitive Notifications entitlement, so those builds deliver the reminders without guaranteed Focus-mode bypass.
 
 ## Install the built app
 

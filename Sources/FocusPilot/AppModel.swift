@@ -16,6 +16,15 @@ enum AutoStartPolicy {
     }
 }
 
+enum PlanVisibility {
+    static func approvedBlocks(in state: AppState) -> [ApprovedBlock] {
+        state.approvedBlocks.values.filter { block in
+            guard let taskID = block.taskID else { return true }
+            return state.tasks[taskID]?.isCompleted == false
+        }
+    }
+}
+
 @MainActor
 final class AppModel: ObservableObject {
     @Published var state = AppState()
@@ -60,9 +69,13 @@ final class AppModel: ObservableObject {
 
     var currentApprovedBlocks: [ApprovedBlock] {
         let now = Date.now
-        return state.approvedBlocks.values
+        return approvedBlocksForPlan
             .filter { $0.start <= now && $0.end > now }
             .sorted { $0.start < $1.start }
+    }
+
+    var approvedBlocksForPlan: [ApprovedBlock] {
+        PlanVisibility.approvedBlocks(in: state)
     }
 
     var currentApprovedBlock: ApprovedBlock? {
@@ -70,7 +83,7 @@ final class AppModel: ObservableObject {
     }
 
     var nextApprovedBlock: ApprovedBlock? {
-        state.approvedBlocks.values.filter { $0.start > .now }.sorted { $0.start < $1.start }.first
+        approvedBlocksForPlan.filter { $0.start > .now }.sorted { $0.start < $1.start }.first
     }
 
     var menuTitle: String {
@@ -193,9 +206,23 @@ final class AppModel: ObservableObject {
         var changed = task
         changed.isCompleted.toggle()
         changed.updatedAt = .now
-        await mutate(.upsertTask(changed))
+        var mutations: [VaultMutation] = [.upsertTask(changed)]
+        let runningSessionIDs = focus.runningSessions
+            .filter { $0.record.taskID == changed.id }
+            .map(\.id)
+
         if changed.isCompleted {
-            await mutate(.addCompletionRecord(.init(taskID: changed.id)))
+            mutations.append(.addCompletionRecord(.init(taskID: changed.id)))
+            mutations.append(contentsOf: state.approvedBlocks.values
+                .filter { $0.taskID == changed.id }
+                .map { .deleteApprovedBlock($0.id) })
+        }
+
+        guard await mutate(mutations) else { return }
+        if changed.isCompleted {
+            for sessionID in runningSessionIDs {
+                focus.stop(sessionID: sessionID)
+            }
         }
     }
 
@@ -332,7 +359,7 @@ final class AppModel: ObservableObject {
             now: now,
             tasks: Array(state.tasks.values),
             commitments: Array(state.weeklyCommitments.values),
-            approvedBlocks: Array(state.approvedBlocks.values),
+            approvedBlocks: approvedBlocksForPlan,
             completionRecords: Array(state.completionRecords.values),
             busyIntervals: busy,
             settings: state.plannerSettings,
@@ -420,9 +447,17 @@ final class AppModel: ObservableObject {
 
     @discardableResult
     private func mutate(_ mutation: VaultMutation) async -> Bool {
-        await perform {
+        await mutate([mutation])
+    }
+
+    @discardableResult
+    private func mutate(_ mutations: [VaultMutation]) async -> Bool {
+        guard !mutations.isEmpty else { return true }
+        return await perform {
             guard let vault = self.vault else { return }
-            try await vault.append(mutation)
+            for mutation in mutations {
+                try await vault.append(mutation)
+            }
             self.state = await vault.currentState()
             self.writeWidgetProjection()
             await self.refreshPlan()
@@ -464,7 +499,7 @@ final class AppModel: ObservableObject {
 
     func checkAutoStarts(at now: Date = .now) {
         guard vaultReady else { return }
-        let dueBlocks = state.approvedBlocks.values
+        let dueBlocks = approvedBlocksForPlan
             .filter { $0.start <= now && $0.end > now }
             .sorted { $0.start < $1.start }
         let currentBlockIDs = Set(dueBlocks.map(\.id))
