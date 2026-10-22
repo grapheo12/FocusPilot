@@ -1,0 +1,71 @@
+name: FocusPilot
+options:
+  bundleIdPrefix: com.focuspilot
+  deploymentTarget:
+    macOS: "15.0"
+packages:
+  FocusPilotKit:
+    path: .
+targets:
+  FocusPilotApp:
+    type: application
+    platform: macOS
+    sources:
+      - path: Sources/FocusPilot
+    dependencies:
+      - package: FocusPilotKit
+        product: FocusPilotCore
+      - package: FocusPilotKit
+        product: FocusPilotPlanner
+      - package: FocusPilotKit
+        product: FocusPilotVault
+      - target: FocusPilotWidget
+        embed: true
+    info:
+      path: Configuration/FocusPilot-Info.plist
+    entitlements:
+      path: Configuration/FocusPilot.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - group.com.focuspilot.shared
+        com.apple.security.personal-information.calendars: true
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.focuspilot.mac
+        PRODUCT_NAME: FocusPilot
+        CODE_SIGNING_ALLOWED: NO
+        ENABLE_HARDENED_RUNTIME: YES
+        ENABLE_USER_SCRIPT_SANDBOXING: NO
+        SWIFT_VERSION: 6.0
+  FocusPilotWidget:
+    type: app-extension
+    platform: macOS
+    sources:
+      - path: FocusPilotWidget
+    dependencies:
+      - package: FocusPilotKit
+        product: FocusPilotCore
+    info:
+      path: Configuration/FocusPilotWidget-Info.plist
+    entitlements:
+      path: Configuration/FocusPilotWidget.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - group.com.focuspilot.shared
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.focuspilot.mac.widget
+        PRODUCT_NAME: FocusPilotWidget
+        CODE_SIGNING_ALLOWED: NO
+        SKIP_INSTALL: YES
+        SWIFT_VERSION: 6.0
+schemes:
+  FocusPilot:
+    build:
+      targets:
+        FocusPilotApp: all
+        FocusPilotWidget: all
+    run:
+      config: Debug
+    archive:
+      config: Release

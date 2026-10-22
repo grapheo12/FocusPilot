@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://focuspilot.local/schemas/vault-manifest.schema.json",
+  "title": "FocusPilot vault manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "vaultID"],
+  "properties": {
+    "schemaVersion": { "type": "integer", "minimum": 1 },
+    "vaultID": { "type": "string", "format": "uuid" },
+    "currentSnapshot": { "type": ["string", "null"], "pattern": "^[A-F0-9-]+\\.json$" }
+  }
+}

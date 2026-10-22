@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://focuspilot.local/schemas/encrypted-envelope.schema.json",
+  "title": "FocusPilot encrypted envelope",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "algorithm", "nonce", "ciphertext", "tag"],
+  "properties": {
+    "schemaVersion": { "type": "integer", "minimum": 1 },
+    "algorithm": { "const": "AES-256-GCM" },
+    "nonce": { "type": "string", "contentEncoding": "base64" },
+    "ciphertext": { "type": "string", "contentEncoding": "base64" },
+    "tag": { "type": "string", "contentEncoding": "base64" }
+  }
+}
