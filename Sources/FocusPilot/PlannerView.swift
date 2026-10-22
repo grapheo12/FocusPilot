@@ -7,7 +7,7 @@ struct PlannerView: View {
     @State private var editingBlock: ApprovedBlock?
 
     private var bulkApprovableProposals: [ProposedBlock] {
-        model.proposals.filter { $0.kind != .calendarEvent }
+        model.proposals.filter { $0.kind == .task }
     }
 
     var body: some View {

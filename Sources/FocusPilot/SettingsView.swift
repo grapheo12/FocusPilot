@@ -74,6 +74,20 @@ struct SettingsView: View {
                 Toggle("Hide task titles in widgets", isOn: $model.hideWidgetTitles)
             }
 
+            Section("Widgets") {
+                Text(model.widgetSyncStatus)
+                    .foregroundStyle(model.widgetLastUpdated == nil ? .orange : .secondary)
+                if let updated = model.widgetLastUpdated {
+                    Text("Last updated \(updated.formatted(date: .abbreviated, time: .standard))")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else {
+                    Text("Widgets require both targets to be signed by the same Apple Developer team with the FocusPilot App Group enabled.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
             Section("Encrypted Git vault") {
                 HStack {
                     Button("Sync") { Task { await model.sync() } }

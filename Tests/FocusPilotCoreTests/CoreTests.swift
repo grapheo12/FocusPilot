@@ -13,6 +13,40 @@ import Testing
     #expect(decoded == state)
 }
 
+@Test func widgetProjectionStoreRoundTripsSharedJSON() throws {
+    let directory = FileManager.default.temporaryDirectory
+        .appending(path: "FocusPilotWidgetProjectionTests-\(UUID().uuidString)")
+    let url = directory.appending(path: WidgetProjectionStore.filename)
+    defer { try? FileManager.default.removeItem(at: directory) }
+
+    let generatedAt = Date(timeIntervalSince1970: 10_000)
+    let projection = WidgetProjection(
+        generatedAt: generatedAt,
+        currentTitle: "Write proposal",
+        currentEnd: generatedAt.addingTimeInterval(1_800),
+        completedCount: 1,
+        totalCount: 2,
+        tasks: [
+            WidgetTask(id: UUID(), title: "Write proposal", isCompleted: false),
+            WidgetTask(id: UUID(), title: "Review notes", isCompleted: true)
+        ],
+        hideTitles: false,
+        runningTasks: [
+            WidgetRunningTask(
+                id: UUID(),
+                title: "Write proposal",
+                projectedEnd: generatedAt.addingTimeInterval(1_800),
+                isPaused: false
+            )
+        ]
+    )
+
+    try WidgetProjectionStore.write(projection, to: url)
+    let decoded = try WidgetProjectionStore.read(from: url)
+
+    #expect(decoded == projection)
+}
+
 @Test func calendarLinksAndLegacyOptionalFieldsDecode() throws {
     let start = Date(timeIntervalSince1970: 1_000)
     let reference = CalendarEventReference(

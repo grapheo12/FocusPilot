@@ -5,32 +5,36 @@ import WidgetKit
 struct FocusPilotEntry: TimelineEntry {
     let date: Date
     let projection: WidgetProjection
+    let hasSharedData: Bool
 }
 
 struct FocusPilotProvider: TimelineProvider {
     func placeholder(in context: Context) -> FocusPilotEntry {
-        FocusPilotEntry(date: .now, projection: .preview)
+        FocusPilotEntry(date: .now, projection: .preview, hasSharedData: true)
     }
 
     func getSnapshot(in context: Context, completion: @escaping (FocusPilotEntry) -> Void) {
         let fallback: WidgetProjection = context.isPreview ? .preview : .empty
-        completion(FocusPilotEntry(date: .now, projection: loadProjection() ?? fallback))
+        let projection = loadProjection()
+        completion(FocusPilotEntry(
+            date: .now,
+            projection: projection ?? fallback,
+            hasSharedData: context.isPreview || projection != nil
+        ))
     }
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<FocusPilotEntry>) -> Void) {
-        let entry = FocusPilotEntry(date: .now, projection: loadProjection() ?? .empty)
+        let projection = loadProjection()
+        let entry = FocusPilotEntry(
+            date: .now,
+            projection: projection ?? .empty,
+            hasSharedData: projection != nil
+        )
         completion(Timeline(entries: [entry], policy: .after(.now.addingTimeInterval(60))))
     }
 
     private func loadProjection() -> WidgetProjection? {
-        guard let container = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: "group.com.focuspilot.shared") else {
-            return nil
-        }
-        let url = container.appending(path: "widget-projection.json")
-        guard let data = try? Data(contentsOf: url) else { return nil }
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .secondsSince1970
-        return try? decoder.decode(WidgetProjection.self, from: data)
+        try? WidgetProjectionStore.read()
     }
 }
 
@@ -48,7 +52,11 @@ struct FocusPilotWidgetView: View {
                     .font(.caption.monospacedDigit())
             }
 
-            if let runningTasks = entry.projection.runningTasks, !runningTasks.isEmpty {
+            if !entry.hasSharedData {
+                Label("Open FocusPilot to sync", systemImage: "arrow.triangle.2.circlepath")
+                    .font(.title3.bold())
+                    .foregroundStyle(.secondary)
+            } else if let runningTasks = entry.projection.runningTasks, !runningTasks.isEmpty {
                 ForEach(runningTasks.prefix(family == .systemSmall ? 1 : 3)) { task in
                     HStack {
                         Text(entry.projection.hideTitles ? "Active task" : task.title)
@@ -58,7 +66,7 @@ struct FocusPilotWidgetView: View {
                         if task.isPaused {
                             Text("Paused")
                         } else if let end = task.projectedEnd {
-                            Text(timerInterval: Date.now...end, countsDown: true)
+                            countdown(to: end)
                                 .monospacedDigit()
                         }
                     }
@@ -69,7 +77,7 @@ struct FocusPilotWidgetView: View {
                     .font(.title3.bold())
                     .lineLimit(2)
                 if let end = entry.projection.currentEnd {
-                    Text(timerInterval: Date.now...end, countsDown: true)
+                    countdown(to: end)
                         .font(.caption.monospacedDigit())
                 }
             } else {
@@ -92,6 +100,10 @@ struct FocusPilotWidgetView: View {
             }
         }
         .containerBackground(.fill.tertiary, for: .widget)
+    }
+
+    private func countdown(to end: Date) -> Text {
+        Text(timerInterval: min(Date.now, end)...end, countsDown: true)
     }
 }
 

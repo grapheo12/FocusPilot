@@ -94,7 +94,7 @@ public struct TaskPlanner: Sendable {
         let calendar = request.calendar
         let startDay = calendar.startOfDay(for: request.now)
         let taskLookup = Dictionary(uniqueKeysWithValues: request.tasks.map { ($0.id, $0) })
-        var occupied = request.busyIntervals + request.approvedBlocks.map {
+        let occupied = request.busyIntervals + request.approvedBlocks.map {
             BusyInterval(start: $0.start, end: $0.end)
         }
         var proposals: [ProposedBlock] = []
@@ -114,12 +114,7 @@ public struct TaskPlanner: Sendable {
                 free = trim(intervals: free, after: request.now)
             }
 
-            if let deepBlock = deepThinkingBlock(in: free, request: request) {
-                proposals.append(deepBlock)
-                let interval = BusyInterval(start: deepBlock.start, end: deepBlock.end)
-                occupied.append(interval)
-                free = subtract(occupied: [interval], from: free)
-            }
+            proposals.append(contentsOf: deepThinkingBlocks(on: day, in: free, request: request))
 
             let eligible = request.tasks
                 .filter { isEligible($0, on: day, calendar: calendar) }
@@ -241,23 +236,45 @@ public struct TaskPlanner: Sendable {
         }
     }
 
-    private func deepThinkingBlock(in free: [BusyInterval], request: PlanRequest) -> ProposedBlock? {
-        guard let day = free.first?.start,
-              !request.approvedBlocks.contains(where: {
-                  $0.kind == .deepThinking && request.calendar.isDate($0.start, inSameDayAs: day)
-              }) else { return nil }
-        let activeMinutes = request.settings.deepThinkingMinutes
-        let wallMinutes = FocusTiming.wallMinutes(for: activeMinutes, settings: request.notificationSettings)
-        guard let interval = free.first(where: { minutes(in: $0) >= wallMinutes }) else { return nil }
-        let end = interval.start.addingTimeInterval(TimeInterval(wallMinutes * 60))
-        return ProposedBlock(
-            taskID: nil,
-            title: "Deep thinking",
-            start: interval.start,
-            end: end,
-            activeMinutes: activeMinutes,
-            kind: .deepThinking
+    private func deepThinkingBlocks(
+        on day: Date,
+        in free: [BusyInterval],
+        request: PlanRequest
+    ) -> [ProposedBlock] {
+        guard !request.approvedBlocks.contains(where: {
+            $0.kind == .deepThinking && request.calendar.isDate($0.start, inSameDayAs: day)
+        }) else { return [] }
+
+        let wallMinutes = 120
+        let activeMinutes = FocusTiming.activeMinutes(
+            fittingWallMinutes: wallMinutes,
+            settings: request.notificationSettings
         )
+        guard activeMinutes > 0 else { return [] }
+
+        return free.flatMap { interval -> [ProposedBlock] in
+            var blocks: [ProposedBlock] = []
+            var start = roundUp(
+                interval.start,
+                to: request.settings.planningGranularityMinutes,
+                calendar: request.calendar
+            )
+            var end = start.addingTimeInterval(TimeInterval(wallMinutes * 60))
+
+            while end <= interval.end {
+                blocks.append(ProposedBlock(
+                    taskID: nil,
+                    title: "Deep thinking",
+                    start: start,
+                    end: end,
+                    activeMinutes: activeMinutes,
+                    kind: .deepThinking
+                ))
+                start = end
+                end = start.addingTimeInterval(TimeInterval(wallMinutes * 60))
+            }
+            return blocks
+        }
     }
 
     private func allocate(
@@ -290,6 +307,15 @@ public struct TaskPlanner: Sendable {
     private func roundDown(_ value: Int, to granularity: Int) -> Int {
         guard granularity > 0 else { return value }
         return value / granularity * granularity
+    }
+
+    private func roundUp(_ date: Date, to granularity: Int, calendar: Calendar) -> Date {
+        guard granularity > 0 else { return date }
+        let dayStart = calendar.startOfDay(for: date)
+        let interval = date.timeIntervalSince(dayStart)
+        let step = TimeInterval(granularity * 60)
+        let rounded = ceil(interval / step) * step
+        return dayStart.addingTimeInterval(rounded)
     }
 
     private func minutes(in interval: BusyInterval) -> Int {

@@ -33,7 +33,8 @@ FocusPilot is productivity software, not a diagnostic or medical tool.
 - Generate a rolling seven-day plan inside configurable working hours.
 - Avoid Calendar events and already approved task blocks.
 - Prioritize urgent work, deadlines, and outstanding weekly commitments.
-- Suggest one high-priority deep-thinking block of at least two active hours per workday when feasible.
+- Suggest every non-overlapping two-hour deep-thinking option available during each workday.
+- Treat deep-thinking suggestions as alternatives, then replan the day after one is approved.
 - Automatically approve every schedulable block for tasks you create directly.
 - Require explicit approval for deep-thinking and other remaining suggestions.
 - Show tasks that could not fit into the available week.
@@ -55,6 +56,7 @@ FocusPilot is productivity software, not a diagnostic or medical tool.
 
 - Provide small and medium widgets for the macOS desktop and Notification Center.
 - Show multiple running tasks, countdowns, finished count, unfinished count, and recent tasks.
+- Synchronize widget data through a shared App Group and report signing or storage problems in Settings.
 - Hide task titles with a privacy setting.
 - Share a platform-neutral widget projection suitable for a future iOS lock-screen widget.
 
@@ -95,7 +97,7 @@ macOS does not support third-party Mac lock-screen widgets. Lock-screen presenta
 - Xcode 16.4 or newer
 - Git, included with Xcode Command Line Tools
 - XcodeGen 2.46 or newer when regenerating the project
-- An Apple Developer signing identity only for Developer ID distribution and notarization
+- An Apple Developer team configured in Xcode for App Group-backed widget synchronization
 
 ## Install for local use
 
@@ -112,21 +114,22 @@ macOS does not support third-party Mac lock-screen widgets. Lock-screen presenta
    xcodegen generate
    ```
 
-4. Open `FocusPilot.xcodeproj` in Xcode.
-5. Select the `FocusPilot` scheme and the `My Mac` destination.
-6. Press **Run**.
-7. Approve notification and Calendar access when requested.
-8. Choose an empty folder for the separate encrypted vault repository.
-9. Export the recovery key from Settings and store it somewhere outside both repositories.
+4. Open `FocusPilot.xcodeproj` in Xcode and sign in under **Xcode > Settings > Accounts**.
+5. Select both `FocusPilotApp` and `FocusPilotWidget`, enable automatic signing, and choose the same development team.
+6. Confirm both targets contain the `group.com.focuspilot.shared` App Group capability.
+7. Select the `FocusPilot` scheme and the `My Mac` destination, then press **Run**.
+8. Approve notification and Calendar access when requested.
+9. Choose an empty folder for the separate encrypted vault repository.
+10. Export the recovery key from Settings and store it somewhere outside both repositories.
 
-The checked-in project keeps Xcode signing disabled because restricted capabilities require an Apple provisioning profile. The included local build script signs the finished app and widget ad hoc after compilation, using a local entitlement set that omits the restricted Time Sensitive capability so the app can run without an Apple Developer certificate. The app still requests and marks Time Sensitive alerts through UserNotifications; a Developer-signed build is required for guaranteed Focus-mode bypass behavior.
+The widget and containing app must be signed by the same Apple Developer team. FocusPilot no longer creates an ad-hoc build that appears to contain a widget but cannot reliably access its shared App Group container.
 
 ## Install the built app
 
-Build and ad-hoc sign the local application from Terminal:
+Find your Team ID in the Membership details for your Apple Developer account, then build and sign the application from Terminal:
 
 ```sh
-./scripts/build-local.sh
+FOCUSPILOT_DEVELOPMENT_TEAM=YOUR_TEAM_ID ./scripts/build-local.sh
 ```
 
 Then copy the app into Applications and launch it:
@@ -135,8 +138,6 @@ Then copy the app into Applications and launch it:
 ditto .build/XcodeDerivedData/Build/Products/Release/FocusPilot.app /Applications/FocusPilot.app
 open /Applications/FocusPilot.app
 ```
-
-The first launch may require Control-clicking the app and choosing **Open** because an ad-hoc signed app is not notarized.
 
 To add the widget, Control-click the macOS desktop, choose **Edit Widgets**, search for **FocusPilot**, and add the small or medium widget. The same widget is available in Notification Center.
 
@@ -147,10 +148,10 @@ To distribute the app to other Macs without the local security warning:
 1. Join the Apple Developer Program and install a `Developer ID Application` certificate in Keychain.
 2. In Xcode, select both `FocusPilotApp` and `FocusPilotWidget`.
 3. Under **Signing & Capabilities**, choose your team and enable automatic signing.
-4. Change `CODE_SIGNING_ALLOWED` to `YES`, add your `DEVELOPMENT_TEAM` to both targets in `project.yml`, and regenerate the project.
+4. Add your `DEVELOPMENT_TEAM` to both targets through your release configuration or command line and regenerate the project.
 5. Archive the `FocusPilot` scheme, export a Developer ID application, and submit it to Apple for notarization.
 
-The current machine has no valid Apple signing identity, so this repository can produce a locally signed build but cannot create a Developer ID-signed or notarized release until a certificate is installed.
+The current machine has no valid Apple signing identity, so a signed local or distributable build cannot be produced until an Apple account and certificate are configured in Xcode.
 
 ## Command-line development
 

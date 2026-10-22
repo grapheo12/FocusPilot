@@ -1,5 +1,62 @@
 import Foundation
 
+public enum WidgetProjectionStoreError: LocalizedError, Equatable {
+    case sharedContainerUnavailable
+
+    public var errorDescription: String? {
+        switch self {
+        case .sharedContainerUnavailable:
+            "Widget sharing is unavailable. Build both targets with the same Apple Developer team and App Group."
+        }
+    }
+}
+
+public enum WidgetProjectionStore {
+    public static let appGroupIdentifier = "group.com.focuspilot.shared"
+    public static let filename = "widget-projection.json"
+
+    public static func projectionURL(fileManager: FileManager = .default) throws -> URL {
+        guard let container = fileManager.containerURL(
+            forSecurityApplicationGroupIdentifier: appGroupIdentifier
+        ) else {
+            throw WidgetProjectionStoreError.sharedContainerUnavailable
+        }
+        return container.appending(path: filename)
+    }
+
+    public static func write(
+        _ projection: WidgetProjection,
+        fileManager: FileManager = .default
+    ) throws {
+        try write(projection, to: projectionURL(fileManager: fileManager), fileManager: fileManager)
+    }
+
+    public static func write(
+        _ projection: WidgetProjection,
+        to url: URL,
+        fileManager: FileManager = .default
+    ) throws {
+        try fileManager.createDirectory(
+            at: url.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .secondsSince1970
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        try encoder.encode(projection).write(to: url, options: .atomic)
+    }
+
+    public static func read(fileManager: FileManager = .default) throws -> WidgetProjection {
+        try read(from: projectionURL(fileManager: fileManager))
+    }
+
+    public static func read(from url: URL) throws -> WidgetProjection {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .secondsSince1970
+        return try decoder.decode(WidgetProjection.self, from: Data(contentsOf: url))
+    }
+}
+
 public struct WidgetTask: Codable, Identifiable, Hashable, Sendable {
     public var id: UUID
     public var title: String

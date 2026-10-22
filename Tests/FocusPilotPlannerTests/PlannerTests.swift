@@ -40,8 +40,121 @@ private func fixedCalendar() -> Calendar {
 
     let result = TaskPlanner().generate(request)
 
-    #expect(result.proposals.first?.kind == .deepThinking)
+    #expect(result.proposals.contains { $0.kind == .deepThinking })
     #expect(result.proposals.contains { $0.taskID == task.id })
+}
+
+@Test func proposesEveryNonOverlappingTwoHourSlot() throws {
+    let calendar = fixedCalendar()
+    let now = try #require(calendar.date(from: DateComponents(year: 2026, month: 10, day: 19, hour: 8)))
+    let settings = PlannerSettings(workingHours: [
+        DailyWorkingHours(weekday: .monday, startMinute: 9 * 60, endMinute: 13 * 60, isEnabled: true)
+    ])
+
+    let result = TaskPlanner().generate(.init(
+        now: now,
+        days: 1,
+        calendar: calendar,
+        tasks: [],
+        commitments: [],
+        approvedBlocks: [],
+        completionRecords: [],
+        busyIntervals: [],
+        settings: settings,
+        notificationSettings: .init()
+    ))
+    let deepBlocks = result.proposals.filter { $0.kind == .deepThinking }
+
+    #expect(deepBlocks.count == 2)
+    #expect(calendar.component(.hour, from: deepBlocks[0].start) == 9)
+    #expect(calendar.component(.hour, from: deepBlocks[1].start) == 11)
+    #expect(deepBlocks.allSatisfy { Int($0.end.timeIntervalSince($0.start) / 60) == 120 })
+    #expect(deepBlocks.allSatisfy { $0.activeMinutes == 105 })
+}
+
+@Test func proposesSlotsInEverySeparateFreeInterval() throws {
+    let calendar = fixedCalendar()
+    let now = try #require(calendar.date(from: DateComponents(year: 2026, month: 10, day: 19, hour: 8)))
+    let busyStart = try #require(calendar.date(from: DateComponents(year: 2026, month: 10, day: 19, hour: 11)))
+    let busyEnd = try #require(calendar.date(from: DateComponents(year: 2026, month: 10, day: 19, hour: 12)))
+
+    let result = TaskPlanner().generate(.init(
+        now: now,
+        days: 1,
+        calendar: calendar,
+        tasks: [],
+        commitments: [],
+        approvedBlocks: [],
+        completionRecords: [],
+        busyIntervals: [.init(start: busyStart, end: busyEnd)],
+        settings: .init(),
+        notificationSettings: .init()
+    ))
+    let starts = result.proposals
+        .filter { $0.kind == .deepThinking }
+        .map { calendar.component(.hour, from: $0.start) }
+
+    #expect(starts == [9, 12, 14])
+}
+
+@Test func roundsTodaysDeepThinkingStartUpToPlanningGranularity() throws {
+    let calendar = fixedCalendar()
+    let now = try #require(calendar.date(from: DateComponents(
+        year: 2026,
+        month: 10,
+        day: 19,
+        hour: 9,
+        minute: 7
+    )))
+    let settings = PlannerSettings(workingHours: [
+        DailyWorkingHours(weekday: .monday, startMinute: 9 * 60, endMinute: 12 * 60, isEnabled: true)
+    ])
+
+    let result = TaskPlanner().generate(.init(
+        now: now,
+        days: 1,
+        calendar: calendar,
+        tasks: [],
+        commitments: [],
+        approvedBlocks: [],
+        completionRecords: [],
+        busyIntervals: [],
+        settings: settings,
+        notificationSettings: .init()
+    ))
+    let block = try #require(result.proposals.first { $0.kind == .deepThinking })
+
+    #expect(calendar.component(.hour, from: block.start) == 9)
+    #expect(calendar.component(.minute, from: block.start) == 15)
+    #expect(calendar.component(.hour, from: block.end) == 11)
+    #expect(calendar.component(.minute, from: block.end) == 15)
+}
+
+@Test func deepThinkingChoicesDoNotReserveTaskTime() throws {
+    let calendar = fixedCalendar()
+    let now = try #require(calendar.date(from: DateComponents(year: 2026, month: 10, day: 19, hour: 8)))
+    let task = TaskItem(title: "Flexible", estimatedMinutes: 60)
+    let settings = PlannerSettings(workingHours: [
+        DailyWorkingHours(weekday: .monday, startMinute: 9 * 60, endMinute: 13 * 60, isEnabled: true)
+    ])
+
+    let result = TaskPlanner().generate(.init(
+        now: now,
+        days: 1,
+        calendar: calendar,
+        tasks: [task],
+        commitments: [],
+        approvedBlocks: [],
+        completionRecords: [],
+        busyIntervals: [],
+        settings: settings,
+        notificationSettings: .init()
+    ))
+    let deepBlock = try #require(result.proposals.first { $0.kind == .deepThinking })
+    let taskBlock = try #require(result.proposals.first { $0.taskID == task.id })
+
+    #expect(taskBlock.start < deepBlock.end)
+    #expect(taskBlock.end > deepBlock.start)
 }
 
 @Test func plannerAvoidsCalendarBusyTime() throws {
@@ -50,8 +163,6 @@ private func fixedCalendar() -> Calendar {
     let busyStart = try #require(calendar.date(from: DateComponents(year: 2026, month: 10, day: 19, hour: 9)))
     let busyEnd = try #require(calendar.date(from: DateComponents(year: 2026, month: 10, day: 19, hour: 12)))
     let task = TaskItem(title: "Task", estimatedMinutes: 60)
-    var settings = PlannerSettings()
-    settings.deepThinkingMinutes = 120
     let request = PlanRequest(
         now: now,
         days: 1,
@@ -61,7 +172,7 @@ private func fixedCalendar() -> Calendar {
         approvedBlocks: [],
         completionRecords: [],
         busyIntervals: [.init(start: busyStart, end: busyEnd)],
-        settings: settings,
+        settings: .init(),
         notificationSettings: .init()
     )
 
@@ -74,8 +185,6 @@ private func fixedCalendar() -> Calendar {
     let calendar = fixedCalendar()
     let now = try #require(calendar.date(from: DateComponents(year: 2026, month: 10, day: 19, hour: 8)))
     let task = TaskItem(title: "Task", priority: .urgent, estimatedMinutes: 60)
-    var settings = PlannerSettings()
-    settings.deepThinkingMinutes = 600
     let result = TaskPlanner().generate(.init(
         now: now,
         days: 1,
@@ -85,7 +194,7 @@ private func fixedCalendar() -> Calendar {
         approvedBlocks: [],
         completionRecords: [],
         busyIntervals: [],
-        settings: settings,
+        settings: .init(),
         notificationSettings: .init()
     ))
 

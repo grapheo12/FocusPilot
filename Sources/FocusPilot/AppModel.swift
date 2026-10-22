@@ -27,6 +27,8 @@ final class AppModel: ObservableObject {
     @Published var hideWidgetTitles = false {
         didSet { writeWidgetProjection() }
     }
+    @Published private(set) var widgetSyncStatus = "Waiting for the vault to open."
+    @Published private(set) var widgetLastUpdated: Date?
     @Published var lastCompactionMessage: String?
     @Published var startAtLogin = SMAppService.mainApp.status == .enabled
 
@@ -39,6 +41,7 @@ final class AppModel: ObservableObject {
     private var cancellables = Set<AnyCancellable>()
     private var scheduleTimer: Timer?
     private var handledBlockIDs = Set<UUID>()
+    private var projectedCurrentBlockIDs = Set<UUID>()
 
     private var deviceID: UUID {
         if let value = defaults.string(forKey: "deviceID"), let id = UUID(uuidString: value) { return id }
@@ -228,7 +231,7 @@ final class AppModel: ObservableObject {
     }
 
     func approveAll() async {
-        await approve(proposals.filter { $0.kind != .calendarEvent })
+        await approve(proposals.filter { $0.kind == .task })
     }
 
     func saveApprovedBlock(_ block: ApprovedBlock) async {
@@ -464,6 +467,9 @@ final class AppModel: ObservableObject {
         let dueBlocks = state.approvedBlocks.values
             .filter { $0.start <= now && $0.end > now }
             .sorted { $0.start < $1.start }
+        let currentBlockIDs = Set(dueBlocks.map(\.id))
+        let currentBlocksChanged = currentBlockIDs != projectedCurrentBlockIDs
+        projectedCurrentBlockIDs = currentBlockIDs
 
         for block in dueBlocks {
             guard !focus.contains(approvedBlockID: block.id),
@@ -491,7 +497,9 @@ final class AppModel: ObservableObject {
                 existingSession: sessions.first(where: { $0.endedAt == nil })
             )
         }
-        writeWidgetProjection()
+        if currentBlocksChanged {
+            writeWidgetProjection()
+        }
     }
 
     private func startScheduleTimer() {
@@ -583,17 +591,14 @@ final class AppModel: ObservableObject {
             hideTitles: hideWidgetTitles,
             runningTasks: runningTasks
         )
-        guard let url = widgetProjectionURL() else { return }
-        try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try? JSONEncoder.vaultEncoder.encode(projection).write(to: url, options: .atomic)
-        WidgetCenter.shared.reloadTimelines(ofKind: "FocusPilotWidget")
-    }
-
-    private func widgetProjectionURL() -> URL? {
-        if let group = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: "group.com.focuspilot.shared") {
-            return group.appending(path: "widget-projection.json")
+        do {
+            try WidgetProjectionStore.write(projection)
+            widgetLastUpdated = projection.generatedAt
+            widgetSyncStatus = "Widget data is synchronized."
+            WidgetCenter.shared.reloadTimelines(ofKind: "FocusPilotWidget")
+        } catch {
+            widgetLastUpdated = nil
+            widgetSyncStatus = error.localizedDescription
         }
-        return FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first?
-            .appending(path: "FocusPilot/widget-projection.json")
     }
 }

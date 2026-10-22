@@ -195,6 +195,12 @@
 				BuildIndependentTargetsInParallel = YES;
 				LastUpgradeCheck = 1430;
 				TargetAttributes = {
+					709A61B26C93924705B7629D = {
+						ProvisioningStyle = Automatic;
+					};
+					78431467FC89938D462A964E = {
+						ProvisioningStyle = Automatic;
+					};
 				};
 			};
 			buildConfigurationList = E1DEE22DFEF6E0183D8457DA /* Build configuration list for PBXProject "FocusPilot" */;
@@ -261,8 +267,9 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				CODE_SIGNING_ALLOWED = NO;
+				CODE_SIGNING_ALLOWED = YES;
 				CODE_SIGN_ENTITLEMENTS = Configuration/FocusPilot.entitlements;
+				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
@@ -273,6 +280,7 @@
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.focuspilot.mac;
 				PRODUCT_NAME = FocusPilot;
+				REGISTER_APP_GROUPS = YES;
 				SDKROOT = macosx;
 				SWIFT_VERSION = 6.0;
 			};
@@ -337,8 +345,9 @@
 		8CB57E099C8A42A3C444E6EF /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				CODE_SIGNING_ALLOWED = NO;
+				CODE_SIGNING_ALLOWED = YES;
 				CODE_SIGN_ENTITLEMENTS = Configuration/FocusPilotWidget.entitlements;
+				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				INFOPLIST_FILE = "Configuration/FocusPilotWidget-Info.plist";
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -348,6 +357,7 @@
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.focuspilot.mac.widget;
 				PRODUCT_NAME = FocusPilotWidget;
+				REGISTER_APP_GROUPS = YES;
 				SDKROOT = macosx;
 				SKIP_INSTALL = YES;
 				SWIFT_VERSION = 6.0;
@@ -357,8 +367,9 @@
 		9EC9CEE0391D68DF27BB3713 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				CODE_SIGNING_ALLOWED = NO;
+				CODE_SIGNING_ALLOWED = YES;
 				CODE_SIGN_ENTITLEMENTS = Configuration/FocusPilotWidget.entitlements;
+				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				INFOPLIST_FILE = "Configuration/FocusPilotWidget-Info.plist";
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -368,6 +379,7 @@
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.focuspilot.mac.widget;
 				PRODUCT_NAME = FocusPilotWidget;
+				REGISTER_APP_GROUPS = YES;
 				SDKROOT = macosx;
 				SKIP_INSTALL = YES;
 				SWIFT_VERSION = 6.0;
@@ -378,8 +390,9 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				CODE_SIGNING_ALLOWED = NO;
+				CODE_SIGNING_ALLOWED = YES;
 				CODE_SIGN_ENTITLEMENTS = Configuration/FocusPilot.entitlements;
+				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
@@ -390,6 +403,7 @@
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.focuspilot.mac;
 				PRODUCT_NAME = FocusPilot;
+				REGISTER_APP_GROUPS = YES;
 				SDKROOT = macosx;
 				SWIFT_VERSION = 6.0;
 			};
