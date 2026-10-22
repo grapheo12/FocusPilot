@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct MenuBarView: View {
+    @Environment(\.openWindow) private var openWindow
     @ObservedObject var model: AppModel
     @State private var quickTask = ""
 
@@ -70,7 +71,10 @@ struct MenuBarView: View {
 
             Divider()
             HStack {
-                Button("Open FocusPilot") { NSApp.activate(ignoringOtherApps: true) }
+                Button("Open FocusPilot") {
+                    openWindow(id: "main")
+                    NSApp.activate(ignoringOtherApps: true)
+                }
                 Spacer()
                 Button("Quit") { NSApp.terminate(nil) }
             }
