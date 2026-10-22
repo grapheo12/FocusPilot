@@ -18,5 +18,7 @@
 	<string>1.0.1</string>
 	<key>CFBundleVersion</key>
 	<string>2</string>
+	<key>NSCalendarsFullAccessUsageDescription</key>
+	<string>FocusPilot reads your calendar to avoid scheduling tasks during existing events and to suggest available focus time.</string>
 </dict>
 </plist>

@@ -212,6 +212,19 @@ final class AppModel: ObservableObject {
         }
     }
 
+    func requestCalendarAccess() async {
+        do {
+            guard try await calendarService.requestAccess() else {
+                errorMessage = calendarService.authorizationDescription
+                return
+            }
+            await refreshPlan()
+        } catch {
+            calendarService.refreshAuthorizationStatus()
+            errorMessage = "Calendar access could not be requested: \(error.localizedDescription)"
+        }
+    }
+
     func sendTestNotification() async {
         do {
             try await focus.sendTestNag()

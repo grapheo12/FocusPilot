@@ -26,6 +26,7 @@ targets:
       properties:
         CFBundleShortVersionString: "1.0.1"
         CFBundleVersion: "2"
+        NSCalendarsFullAccessUsageDescription: FocusPilot reads your calendar to avoid scheduling tasks during existing events and to suggest available focus time.
     entitlements:
       path: Configuration/FocusPilot.entitlements
       properties:

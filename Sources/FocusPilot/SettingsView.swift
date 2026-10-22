@@ -45,11 +45,11 @@ struct SettingsView: View {
 
             Section("Calendar") {
                 Button("Allow Calendar Access") {
-                    Task {
-                        _ = try? await model.calendarService.requestAccess()
-                        await model.refreshPlan()
-                    }
+                    Task { await model.requestCalendarAccess() }
                 }
+                Text(model.calendarService.authorizationDescription)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
                 ForEach(model.calendarService.calendars, id: \.calendarIdentifier) { calendar in
                     Toggle(calendar.title, isOn: Binding(
                         get: { model.calendarService.selectedCalendarIDs.contains(calendar.calendarIdentifier) },
