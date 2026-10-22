@@ -3,6 +3,7 @@ import SwiftUI
 
 struct SettingsView: View {
     @ObservedObject var model: AppModel
+    @State private var notificationStatus = "Checking notification status…"
 
     var body: some View {
         Form {
@@ -23,8 +24,22 @@ struct SettingsView: View {
                 Stepper("Ask every \(model.state.notificationSettings.nagIntervalMinutes) minutes", value: nagBinding, in: 5...60, step: 5)
                 Stepper("Break after \(model.state.notificationSettings.focusIntervalMinutes) focus minutes", value: focusBinding, in: 15...90, step: 5)
                 Stepper("Break for \(model.state.notificationSettings.breakMinutes) minutes", value: breakBinding, in: 1...30)
-                Button("Allow Notifications") {
-                    Task { _ = try? await model.focus.requestNotificationAccess() }
+                Text(notificationStatus)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                HStack {
+                    Button("Allow Notifications") {
+                        Task {
+                            await model.requestNotificationAccess()
+                            await refreshNotificationStatus()
+                        }
+                    }
+                    Button("Send Test Nag") {
+                        Task {
+                            await model.sendTestNotification()
+                            await refreshNotificationStatus()
+                        }
+                    }
                 }
             }
 
@@ -66,6 +81,11 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
+        .task { await refreshNotificationStatus() }
+    }
+
+    private func refreshNotificationStatus() async {
+        notificationStatus = await model.notificationStatusDescription()
     }
 
     private var nagBinding: Binding<Int> {

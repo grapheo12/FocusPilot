@@ -19,6 +19,7 @@
 		9F764CE2BCD77FDA1EA75C3E /* FocusPilotCore in Frameworks */ = {isa = PBXBuildFile; productRef = 8FF63F81159177DE8891677E /* FocusPilotCore */; };
 		AB311285055A3FFC0CC5FE37 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02C14D17F3F6BD2C03F4B4BE /* SettingsView.swift */; };
 		E7BA27E197937A54CCC4AF2B /* FocusPilotWidget.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = C750D7D73940B79512FD771D /* FocusPilotWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		E90F9D151C3BE71426CA799D /* NotificationCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A725348982E2C526203673B /* NotificationCoordinator.swift */; };
 		E99D098826C56BBDDB9CE5D7 /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A18BB02C29254FF355ED7EE9 /* AppModel.swift */; };
 		F39CA0B3F65396816DDEA374 /* CalendarService.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2C557269014D6087DF24556 /* CalendarService.swift */; };
 		FC147DF0C7DE6690BC3E2C6E /* MainView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C9915CE266F830F784A9C63D /* MainView.swift */; };
@@ -50,6 +51,7 @@
 
 /* Begin PBXFileReference section */
 		02C14D17F3F6BD2C03F4B4BE /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		0A725348982E2C526203673B /* NotificationCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationCoordinator.swift; sourceTree = "<group>"; };
 		2CEB887A3823EC0ED3BF7ED9 /* TaskListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskListView.swift; sourceTree = "<group>"; };
 		2E9151AA442FD21E9F43F7EF /* FocusPilotWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusPilotWidget.swift; sourceTree = "<group>"; };
 		48CE2E69307B6D85978B8067 /* productivity */ = {isa = PBXFileReference; lastKnownFileType = folder; name = productivity; path = .; sourceTree = SOURCE_ROOT; };
@@ -121,6 +123,7 @@
 				7C5B7CD9C90915817BE00312 /* FocusPilotApp.swift */,
 				C9915CE266F830F784A9C63D /* MainView.swift */,
 				EFAB3FAF83572B6366B1E04A /* MenuBarView.swift */,
+				0A725348982E2C526203673B /* NotificationCoordinator.swift */,
 				DDCC66A59E2BF33B04805BA8 /* PlannerView.swift */,
 				02C14D17F3F6BD2C03F4B4BE /* SettingsView.swift */,
 				2CEB887A3823EC0ED3BF7ED9 /* TaskListView.swift */,
@@ -236,6 +239,7 @@
 				8B09A114B67A7707847EF539 /* FocusPilotApp.swift in Sources */,
 				FC147DF0C7DE6690BC3E2C6E /* MainView.swift in Sources */,
 				3A7817C4B3555CC46A44591B /* MenuBarView.swift in Sources */,
+				E90F9D151C3BE71426CA799D /* NotificationCoordinator.swift in Sources */,
 				30D7181F7617117F939A8EC8 /* PlannerView.swift in Sources */,
 				AB311285055A3FFC0CC5FE37 /* SettingsView.swift in Sources */,
 				13353DD646F69C0709B9F999 /* TaskListView.swift in Sources */,

@@ -23,12 +23,16 @@ targets:
         embed: true
     info:
       path: Configuration/FocusPilot-Info.plist
+      properties:
+        CFBundleShortVersionString: "1.0.1"
+        CFBundleVersion: "2"
     entitlements:
       path: Configuration/FocusPilot.entitlements
       properties:
         com.apple.security.application-groups:
           - group.com.focuspilot.shared
         com.apple.security.personal-information.calendars: true
+        com.apple.developer.usernotifications.time-sensitive: true
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.focuspilot.mac
@@ -47,9 +51,15 @@ targets:
         product: FocusPilotCore
     info:
       path: Configuration/FocusPilotWidget-Info.plist
+      properties:
+        CFBundleShortVersionString: "1.0.1"
+        CFBundleVersion: "2"
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
     entitlements:
       path: Configuration/FocusPilotWidget.entitlements
       properties:
+        com.apple.security.app-sandbox: true
         com.apple.security.application-groups:
           - group.com.focuspilot.shared
     settings:

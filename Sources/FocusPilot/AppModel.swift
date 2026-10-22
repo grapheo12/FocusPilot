@@ -1,9 +1,11 @@
 import AppKit
+import Combine
 import Foundation
 import FocusPilotCore
 import FocusPilotPlanner
 import FocusPilotVault
 import ServiceManagement
+import WidgetKit
 
 @MainActor
 final class AppModel: ObservableObject {
@@ -25,6 +27,7 @@ final class AppModel: ObservableObject {
     private var vault: VaultStore?
     private var vaultKey: Data?
     private let defaults = UserDefaults.standard
+    private var cancellables = Set<AnyCancellable>()
 
     private var deviceID: UUID {
         if let value = defaults.string(forKey: "deviceID"), let id = UUID(uuidString: value) { return id }
@@ -60,8 +63,17 @@ final class AppModel: ObservableObject {
     }
 
     init() {
+        focus.objectWillChange
+            .sink { [weak self] _ in self?.objectWillChange.send() }
+            .store(in: &cancellables)
         focus.onSessionChanged = { [weak self] session in
             self?.persistSession(session)
+        }
+        focus.onProjectionChanged = { [weak self] in
+            self?.writeWidgetProjection()
+        }
+        focus.onNotificationError = { [weak self] message in
+            self?.errorMessage = message
         }
         Task { await restoreVaultIfPossible() }
     }
@@ -113,7 +125,9 @@ final class AppModel: ObservableObject {
     func addTask(title: String, parentID: UUID? = nil) async {
         let clean = title.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !clean.isEmpty else { return }
-        await mutate(.upsertTask(TaskItem(parentID: parentID, title: clean)))
+        let task = TaskItem(parentID: parentID, title: clean)
+        guard await mutate(.upsertTask(task)) else { return }
+        await approve(proposals.filter { $0.taskID == task.id })
     }
 
     func saveTask(_ task: TaskItem) async {
@@ -160,13 +174,11 @@ final class AppModel: ObservableObject {
     }
 
     func approve(_ proposal: ProposedBlock) async {
-        await mutate(.upsertApprovedBlock(.init(proposal: proposal)))
-        proposals.removeAll { $0.id == proposal.id }
+        await approve([proposal])
     }
 
     func approveAll() async {
-        let pending = proposals
-        for proposal in pending { await approve(proposal) }
+        await approve(proposals)
     }
 
     func start(_ task: TaskItem) {
@@ -180,6 +192,36 @@ final class AppModel: ObservableObject {
         focus.settings = state.notificationSettings
         focus.start(taskID: block.taskID, title: block.title, activeMinutes: block.activeMinutes)
         writeWidgetProjection()
+    }
+
+    func toggleFocusPause() {
+        focus.togglePause()
+    }
+
+    func stopFocus() {
+        focus.stop()
+    }
+
+    func requestNotificationAccess() async {
+        do {
+            guard try await focus.requestNotificationAccess() else {
+                throw NotificationCoordinatorError.authorizationDenied
+            }
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    func sendTestNotification() async {
+        do {
+            try await focus.sendTestNag()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    func notificationStatusDescription() async -> String {
+        await focus.notificationStatusDescription()
     }
 
     func refreshPlan() async {
@@ -256,13 +298,34 @@ final class AppModel: ObservableObject {
         await openVault(at: URL(fileURLWithPath: path))
     }
 
-    private func mutate(_ mutation: VaultMutation) async {
+    @discardableResult
+    private func mutate(_ mutation: VaultMutation) async -> Bool {
         await perform {
             guard let vault = self.vault else { return }
             try await vault.append(mutation)
             self.state = await vault.currentState()
             self.writeWidgetProjection()
             await self.refreshPlan()
+        }
+    }
+
+    private func approve(_ selected: [ProposedBlock]) async {
+        guard !selected.isEmpty else { return }
+        let previous = proposals
+        let selectedIDs = Set(selected.map(\.id))
+        proposals.removeAll { selectedIDs.contains($0.id) }
+
+        let succeeded = await perform {
+            guard let vault = self.vault else { return }
+            for proposal in selected {
+                try await vault.append(.upsertApprovedBlock(.init(proposal: proposal)))
+            }
+            self.state = await vault.currentState()
+            self.writeWidgetProjection()
+            await self.refreshPlan()
+        }
+        if !succeeded {
+            proposals = previous
         }
     }
 
@@ -275,13 +338,16 @@ final class AppModel: ObservableObject {
         }
     }
 
-    private func perform(_ operation: @escaping () async throws -> Void) async {
+    @discardableResult
+    private func perform(_ operation: @escaping () async throws -> Void) async -> Bool {
         isBusy = true
         defer { isBusy = false }
         do {
             try await operation()
+            return true
         } catch {
             errorMessage = error.localizedDescription
+            return false
         }
     }
 
@@ -289,7 +355,7 @@ final class AppModel: ObservableObject {
         let tasks = state.tasks.values.sorted { $0.updatedAt > $1.updatedAt }
         let projection = WidgetProjection(
             currentTitle: focus.title ?? currentApprovedBlock?.title,
-            currentEnd: currentApprovedBlock?.end,
+            currentEnd: focus.projectedEnd ?? currentApprovedBlock?.end,
             completedCount: tasks.filter(\.isCompleted).count,
             totalCount: tasks.count,
             tasks: tasks.prefix(8).map { .init(id: $0.id, title: $0.title, isCompleted: $0.isCompleted) },
@@ -298,6 +364,7 @@ final class AppModel: ObservableObject {
         guard let url = widgetProjectionURL() else { return }
         try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
         try? JSONEncoder.vaultEncoder.encode(projection).write(to: url, options: .atomic)
+        WidgetCenter.shared.reloadTimelines(ofKind: "FocusPilotWidget")
     }
 
     private func widgetProjectionURL() -> URL? {

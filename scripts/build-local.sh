@@ -27,7 +27,7 @@ xcodebuild \
   --force \
   --sign - \
   --options runtime \
-  --entitlements Configuration/FocusPilot.entitlements \
+  --entitlements Configuration/FocusPilotLocal.entitlements \
   "${APP_PATH}"
 
 /usr/bin/codesign --verify --deep --strict --verbose=2 "${APP_PATH}"

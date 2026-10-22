@@ -24,9 +24,9 @@ struct MenuBarView: View {
                 }
                 HStack {
                     Button(model.focus.phase == .paused ? "Resume" : "Pause") {
-                        model.focus.togglePause()
+                        model.toggleFocusPause()
                     }
-                    Button("Stop", role: .destructive) { model.focus.stop() }
+                    Button("Stop", role: .destructive) { model.stopFocus() }
                 }
             } else if let block = model.currentApprovedBlock ?? model.nextApprovedBlock {
                 VStack(alignment: .leading, spacing: 3) {

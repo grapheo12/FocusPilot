@@ -32,18 +32,19 @@ FocusPilot is productivity software, not a diagnostic or medical tool.
 - Avoid Calendar events and already approved task blocks.
 - Prioritize urgent work, deadlines, and outstanding weekly commitments.
 - Suggest one high-priority deep-thinking block of at least two active hours per workday when feasible.
-- Require explicit approval before any suggested block becomes part of the schedule.
+- Automatically approve every schedulable block for tasks you create directly.
+- Require explicit approval for deep-thinking and other remaining suggestions.
 - Show tasks that could not fit into the available week.
 - Include planned five-minute breaks when calculating wall-clock block lengths.
 
 ### Focus and break reminders
 
-- Send a plain `Are you doing X?` notification every 15 active-focus minutes by default.
+- Send a Time Sensitive `Are you working on X?` notification every 15 active-focus minutes by default.
 - Keep the reminder interval configurable from 5 to 60 minutes.
 - Pause after 30 active-focus minutes by default and notify you to take a five-minute break.
 - Configure focus intervals and break lengths independently.
 - Suppress task nags during breaks and resume the same task afterward.
-- Avoid notification actions and escalating alerts.
+- Present reminders even while FocusPilot is in the foreground and report disabled notification permissions.
 
 ### Widgets
 
@@ -113,7 +114,7 @@ macOS does not support third-party Mac lock-screen widgets. Lock-screen presenta
 8. Choose an empty folder for the separate encrypted vault repository.
 9. Export the recovery key from Settings and store it somewhere outside both repositories.
 
-The checked-in project keeps Xcode signing disabled because App Groups require an Apple provisioning profile. The included local build script signs the finished app and widget ad hoc after compilation, so they can run on this Mac without an Apple Developer certificate.
+The checked-in project keeps Xcode signing disabled because restricted capabilities require an Apple provisioning profile. The included local build script signs the finished app and widget ad hoc after compilation, using a local entitlement set that omits the restricted Time Sensitive capability so the app can run without an Apple Developer certificate. The app still requests and marks Time Sensitive alerts through UserNotifications; a Developer-signed build is required for guaranteed Focus-mode bypass behavior.
 
 ## Install the built app
 
@@ -131,6 +132,8 @@ open /Applications/FocusPilot.app
 ```
 
 The first launch may require Control-clicking the app and choosing **Open** because an ad-hoc signed app is not notarized.
+
+To add the widget, Control-click the macOS desktop, choose **Edit Widgets**, search for **FocusPilot**, and add the small or medium widget. The same widget is available in Notification Center.
 
 ## Developer ID distribution
 

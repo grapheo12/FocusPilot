@@ -89,6 +89,11 @@ public struct TaskPlanner: Sendable {
             guard let day = calendar.date(byAdding: .day, value: dayOffset, to: startDay),
                   let workWindow = workingWindow(on: day, request: request) else { continue }
 
+            for task in request.tasks where isRecurring(task) {
+                let approvedMinutes = approvedMinutes(for: task.id, on: day, request: request)
+                remaining[task.id] = max(0, task.estimatedMinutes - approvedMinutes)
+            }
+
             var free = subtract(occupied: occupied, from: workWindow)
             if dayOffset == 0 {
                 free = trim(intervals: free, after: request.now)
@@ -136,11 +141,6 @@ public struct TaskPlanner: Sendable {
                 }
             }
 
-            if dayOffset < request.days - 1 {
-                for task in request.tasks where isRecurring(task) {
-                    remaining[task.id] = max(remaining[task.id, default: 0], task.estimatedMinutes)
-                }
-            }
         }
 
         let unscheduled = Set(remaining.filter { $0.value > 0 }.map(\.key)).intersection(taskLookup.keys)
@@ -165,7 +165,22 @@ public struct TaskPlanner: Sendable {
             )
             result[commitment.taskID] = max(result[commitment.taskID, default: 0], commitment.targetMinutes - completed)
         }
+
+        for task in request.tasks where !isRecurring(task) {
+            let approved = request.approvedBlocks
+                .filter { $0.taskID == task.id && $0.end > request.now }
+                .reduce(0) { $0 + $1.activeMinutes }
+            result[task.id] = max(0, result[task.id, default: 0] - approved)
+        }
         return result
+    }
+
+    private func approvedMinutes(for taskID: UUID, on day: Date, request: PlanRequest) -> Int {
+        request.approvedBlocks
+            .filter { block in
+                block.taskID == taskID && request.calendar.isDate(block.start, inSameDayAs: day)
+            }
+            .reduce(0) { $0 + $1.activeMinutes }
     }
 
     private func workingWindow(on day: Date, request: PlanRequest) -> BusyInterval? {
@@ -212,6 +227,10 @@ public struct TaskPlanner: Sendable {
     }
 
     private func deepThinkingBlock(in free: [BusyInterval], request: PlanRequest) -> ProposedBlock? {
+        guard let day = free.first?.start,
+              !request.approvedBlocks.contains(where: {
+                  $0.kind == .deepThinking && request.calendar.isDate($0.start, inSameDayAs: day)
+              }) else { return nil }
         let activeMinutes = request.settings.deepThinkingMinutes
         let wallMinutes = wallMinutes(for: activeMinutes, settings: request.notificationSettings)
         guard let interval = free.first(where: { minutes(in: $0) >= wallMinutes }) else { return nil }

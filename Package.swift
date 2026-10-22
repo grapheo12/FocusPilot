@@ -35,6 +35,10 @@ let package = Package(
         .testTarget(
             name: "FocusPilotVaultTests",
             dependencies: ["FocusPilotCore", "FocusPilotVault"]
+        ),
+        .testTarget(
+            name: "FocusPilotAppTests",
+            dependencies: ["FocusPilot"]
         )
     ]
 )

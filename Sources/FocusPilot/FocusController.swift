@@ -16,15 +16,23 @@ final class FocusController: ObservableObject {
     @Published private(set) var taskID: UUID?
     @Published private(set) var activeSecondsRemaining = 0
     @Published private(set) var phaseSecondsRemaining = 0
+    @Published private(set) var projectedEnd: Date?
 
     var settings = NotificationSettings()
     var onSessionChanged: ((FocusSession) -> Void)?
+    var onProjectionChanged: (() -> Void)?
+    var onNotificationError: ((String) -> Void)?
 
     private var timer: Timer?
     private var activeSeconds = 0
     private var focusIntervalSeconds = 0
     private var nagIntervalSeconds = 0
     private var session: FocusSession?
+    private let notifications: any NotificationCoordinating
+
+    init(notifications: any NotificationCoordinating = NotificationCoordinator.shared) {
+        self.notifications = notifications
+    }
 
     var displayTime: String {
         let value = phase == .breakTime ? phaseSecondsRemaining : activeSecondsRemaining
@@ -32,10 +40,25 @@ final class FocusController: ObservableObject {
     }
 
     func requestNotificationAccess() async throws -> Bool {
-        try await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound])
+        try await notifications.ensureAuthorization()
+    }
+
+    func notificationStatusDescription() async -> String {
+        await notifications.statusDescription()
+    }
+
+    func sendTestNag() async throws {
+        try await notifications.deliver(
+            title: "Are you working on your current task?",
+            body: "This is a test of FocusPilot's Time Sensitive reminders.",
+            interruptionLevel: .timeSensitive
+        )
     }
 
     func start(taskID: UUID?, title: String, activeMinutes: Int) {
+        if session != nil {
+            finishSession()
+        }
         stopTimer()
         self.taskID = taskID
         self.title = title
@@ -46,7 +69,18 @@ final class FocusController: ObservableObject {
         phaseSecondsRemaining = 0
         phase = .focusing
         session = FocusSession(taskID: taskID, title: title)
+        projectedEnd = Date.now.addingTimeInterval(TimeInterval(wallSecondsRemaining()))
         startTimer()
+        onProjectionChanged?()
+        Task {
+            do {
+                guard try await notifications.ensureAuthorization() else {
+                    throw NotificationCoordinatorError.authorizationDenied
+                }
+            } catch {
+                onNotificationError?(error.localizedDescription)
+            }
+        }
     }
 
     func togglePause() {
@@ -54,9 +88,13 @@ final class FocusController: ObservableObject {
         case .focusing, .breakTime:
             phase = .paused
             stopTimer()
+            projectedEnd = nil
+            onProjectionChanged?()
         case .paused:
             phase = phaseSecondsRemaining > 0 ? .breakTime : .focusing
+            projectedEnd = Date.now.addingTimeInterval(TimeInterval(wallSecondsRemaining()))
             startTimer()
+            onProjectionChanged?()
         case .idle:
             break
         }
@@ -69,7 +107,7 @@ final class FocusController: ObservableObject {
 
     private func startTimer() {
         timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
-            Task { @MainActor in self?.tick() }
+            Task { @MainActor in self?.advanceOneSecond() }
         }
         RunLoop.main.add(timer!, forMode: .common)
     }
@@ -79,7 +117,7 @@ final class FocusController: ObservableObject {
         timer = nil
     }
 
-    private func tick() {
+    func advanceOneSecond() {
         switch phase {
         case .focusing:
             activeSecondsRemaining -= 1
@@ -89,7 +127,11 @@ final class FocusController: ObservableObject {
 
             if nagIntervalSeconds >= settings.nagIntervalMinutes * 60 {
                 nagIntervalSeconds = 0
-                notify(title: "Are you doing \(title ?? "your task")?", body: "Return to what you planned to do.")
+                notify(
+                    title: "Are you working on \(title ?? "your task")?",
+                    body: "Return to what you planned to do.",
+                    interruptionLevel: .timeSensitive
+                )
             }
             if activeSecondsRemaining <= 0 {
                 finishSession()
@@ -98,14 +140,22 @@ final class FocusController: ObservableObject {
                 focusIntervalSeconds = 0
                 phaseSecondsRemaining = settings.breakMinutes * 60
                 phase = .breakTime
-                notify(title: "Take a \(settings.breakMinutes)-minute break", body: "Your task will resume after the break.")
+                notify(
+                    title: "Take a \(settings.breakMinutes)-minute break",
+                    body: "Your task will resume after the break.",
+                    interruptionLevel: .active
+                )
             }
         case .breakTime:
             phaseSecondsRemaining -= 1
             if phaseSecondsRemaining <= 0 {
                 phaseSecondsRemaining = 0
                 phase = .focusing
-                notify(title: "Break finished", body: "Resume \(title ?? "your task").")
+                notify(
+                    title: "Break finished",
+                    body: "Resume \(title ?? "your task").",
+                    interruptionLevel: .active
+                )
             }
         case .idle, .paused:
             break
@@ -128,14 +178,36 @@ final class FocusController: ObservableObject {
         activeSecondsRemaining = 0
         phaseSecondsRemaining = 0
         activeSeconds = 0
+        projectedEnd = nil
+        onProjectionChanged?()
     }
 
-    private func notify(title: String, body: String) {
-        let content = UNMutableNotificationContent()
-        content.title = title
-        content.body = body
-        content.sound = .default
-        let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
-        UNUserNotificationCenter.current().add(request)
+    private func wallSecondsRemaining() -> Int {
+        let breakSeconds = settings.breakMinutes * 60
+        if phase == .breakTime {
+            let futureBreaks = max(0, activeSecondsRemaining - 1) / max(1, settings.focusIntervalMinutes * 60)
+            return phaseSecondsRemaining + activeSecondsRemaining + futureBreaks * breakSeconds
+        }
+
+        let intervalSeconds = max(1, settings.focusIntervalMinutes * 60)
+        let secondsUntilBreak = max(1, intervalSeconds - focusIntervalSeconds)
+        guard activeSecondsRemaining > secondsUntilBreak else { return activeSecondsRemaining }
+        let secondsAfterFirstBreak = activeSecondsRemaining - secondsUntilBreak
+        let futureBreaks = 1 + max(0, secondsAfterFirstBreak - 1) / intervalSeconds
+        return activeSecondsRemaining + futureBreaks * breakSeconds
+    }
+
+    private func notify(title: String, body: String, interruptionLevel: UNNotificationInterruptionLevel) {
+        Task {
+            do {
+                try await notifications.deliver(
+                    title: title,
+                    body: body,
+                    interruptionLevel: interruptionLevel
+                )
+            } catch {
+                onNotificationError?(error.localizedDescription)
+            }
+        }
     }
 }

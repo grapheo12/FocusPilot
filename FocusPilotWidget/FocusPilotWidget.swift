@@ -13,11 +13,12 @@ struct FocusPilotProvider: TimelineProvider {
     }
 
     func getSnapshot(in context: Context, completion: @escaping (FocusPilotEntry) -> Void) {
-        completion(FocusPilotEntry(date: .now, projection: loadProjection() ?? .preview))
+        let fallback: WidgetProjection = context.isPreview ? .preview : .empty
+        completion(FocusPilotEntry(date: .now, projection: loadProjection() ?? fallback))
     }
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<FocusPilotEntry>) -> Void) {
-        let entry = FocusPilotEntry(date: .now, projection: loadProjection() ?? .preview)
+        let entry = FocusPilotEntry(date: .now, projection: loadProjection() ?? .empty)
         completion(Timeline(entries: [entry], policy: .after(.now.addingTimeInterval(60))))
     }
 
@@ -91,6 +92,15 @@ struct FocusPilotWidget: Widget {
 }
 
 private extension WidgetProjection {
+    static let empty = WidgetProjection(
+        currentTitle: nil,
+        currentEnd: nil,
+        completedCount: 0,
+        totalCount: 0,
+        tasks: [],
+        hideTitles: false
+    )
+
     static let preview = WidgetProjection(
         currentTitle: "Write project proposal",
         currentEnd: .now.addingTimeInterval(1800),

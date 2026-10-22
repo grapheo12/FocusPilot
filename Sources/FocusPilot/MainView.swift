@@ -6,15 +6,20 @@ struct MainView: View {
     var body: some View {
         Group {
             if model.vaultReady {
-                TabView {
-                    TaskListView(model: model)
-                        .tabItem { Label("Tasks", systemImage: "checklist") }
-                    PlannerView(model: model)
-                        .tabItem { Label("Plan", systemImage: "calendar.day.timeline.left") }
-                    SettingsView(model: model)
-                        .tabItem { Label("Settings", systemImage: "gearshape") }
+                VStack(spacing: 0) {
+                    if model.focus.title != nil {
+                        FocusBanner(model: model)
+                    }
+                    TabView {
+                        TaskListView(model: model)
+                            .tabItem { Label("Tasks", systemImage: "checklist") }
+                        PlannerView(model: model)
+                            .tabItem { Label("Plan", systemImage: "calendar.day.timeline.left") }
+                        SettingsView(model: model)
+                            .tabItem { Label("Settings", systemImage: "gearshape") }
+                    }
+                    .padding()
                 }
-                .padding()
             } else {
                 VaultSetupView(model: model)
             }
@@ -30,6 +35,38 @@ struct MainView: View {
         } message: {
             Text(model.errorMessage ?? "")
         }
+    }
+}
+
+private struct FocusBanner: View {
+    @ObservedObject var model: AppModel
+
+    var body: some View {
+        HStack(spacing: 14) {
+            Image(systemName: model.focus.phase == .breakTime ? "cup.and.saucer.fill" : "scope")
+                .font(.title2)
+                .foregroundStyle(.tint)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(model.focus.phase == .breakTime ? "Break" : "Current task")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Text(model.focus.title ?? "")
+                    .font(.headline)
+                    .lineLimit(1)
+            }
+            Spacer()
+            Text(model.focus.displayTime)
+                .font(.title.monospacedDigit().bold())
+            Button(model.focus.phase == .paused ? "Resume" : "Pause") {
+                model.toggleFocusPause()
+            }
+            Button("Stop", role: .destructive) {
+                model.stopFocus()
+            }
+        }
+        .padding(.horizontal, 18)
+        .padding(.vertical, 12)
+        .background(.regularMaterial)
     }
 }
 

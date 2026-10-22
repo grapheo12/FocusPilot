@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.0.1 - 2026-10-22
+
+### Fixed
+
+- Made task Play buttons start a visibly updating countdown in the main window and menu bar.
+- Added foreground notification presentation, permission diagnostics, test delivery, and Time Sensitive accountability nags.
+- Automatically approved all current planner blocks for newly created tasks.
+- Prevented approved task and deep-thinking blocks from reappearing as duplicate suggestions.
+- Registered the WidgetKit extension correctly so FocusPilot appears in the macOS Add Widget gallery.
+- Reloaded widget timelines after task and focus changes and replaced production preview data with an empty state.
+
 ## 1.0.0 - 2026-10-22
 
 ### Added
