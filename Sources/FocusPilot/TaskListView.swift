@@ -85,8 +85,6 @@ private struct TaskTreeRow: View {
                     .foregroundStyle(.secondary)
                 }
                 Spacer()
-                Button { model.start(task) } label: { Image(systemName: "play.fill") }
-                    .help("Start focus session")
                 Button { addingChild = true; isExpanded = true } label: { Image(systemName: "plus") }
                     .help("Add subtask")
                 Button { editing = true } label: { Image(systemName: "pencil") }

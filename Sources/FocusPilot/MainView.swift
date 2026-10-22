@@ -7,7 +7,7 @@ struct MainView: View {
         Group {
             if model.vaultReady {
                 VStack(spacing: 0) {
-                    if model.focus.title != nil {
+                    if !model.focus.runningSessions.isEmpty {
                         FocusBanner(model: model)
                     }
                     TabView {
@@ -42,26 +42,36 @@ private struct FocusBanner: View {
     @ObservedObject var model: AppModel
 
     var body: some View {
-        HStack(spacing: 14) {
-            Image(systemName: model.focus.phase == .breakTime ? "cup.and.saucer.fill" : "scope")
-                .font(.title2)
-                .foregroundStyle(.tint)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(model.focus.phase == .breakTime ? "Break" : "Current task")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                Text(model.focus.title ?? "")
-                    .font(.headline)
-                    .lineLimit(1)
+        VStack(spacing: 8) {
+            if model.focus.phase == .breakTime {
+                HStack {
+                    Label("Shared break", systemImage: "cup.and.saucer.fill")
+                        .font(.headline)
+                        .foregroundStyle(.tint)
+                    Spacer()
+                    Text(model.focus.sharedBreakDisplayTime)
+                        .font(.title3.monospacedDigit().bold())
+                }
             }
-            Spacer()
-            Text(model.focus.displayTime)
-                .font(.title.monospacedDigit().bold())
-            Button(model.focus.phase == .paused ? "Resume" : "Pause") {
-                model.toggleFocusPause()
-            }
-            Button("Stop", role: .destructive) {
-                model.stopFocus()
+
+            ForEach(model.focus.runningSessions) { session in
+                HStack(spacing: 14) {
+                    Image(systemName: "scope")
+                        .font(.title2)
+                        .foregroundStyle(.tint)
+                    Text(session.record.title)
+                        .font(.headline)
+                        .lineLimit(1)
+                    Spacer()
+                    Text(model.focus.phase == .breakTime ? "Break" : session.displayTime)
+                        .font(.title3.monospacedDigit().bold())
+                    Button(session.isPaused ? "Resume" : "Pause") {
+                        model.toggleFocusPause(sessionID: session.id)
+                    }
+                    Button("Stop", role: .destructive) {
+                        model.stopFocus(sessionID: session.id)
+                    }
+                }
             }
         }
         .padding(.horizontal, 18)

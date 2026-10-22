@@ -48,7 +48,23 @@ struct FocusPilotWidgetView: View {
                     .font(.caption.monospacedDigit())
             }
 
-            if let current = entry.projection.currentTitle {
+            if let runningTasks = entry.projection.runningTasks, !runningTasks.isEmpty {
+                ForEach(runningTasks.prefix(family == .systemSmall ? 1 : 3)) { task in
+                    HStack {
+                        Text(entry.projection.hideTitles ? "Active task" : task.title)
+                            .font(.caption.bold())
+                            .lineLimit(1)
+                        Spacer()
+                        if task.isPaused {
+                            Text("Paused")
+                        } else if let end = task.projectedEnd {
+                            Text(timerInterval: Date.now...end, countsDown: true)
+                                .monospacedDigit()
+                        }
+                    }
+                    .font(.caption)
+                }
+            } else if let current = entry.projection.currentTitle {
                 Text(entry.projection.hideTitles ? "Current task" : current)
                     .font(.title3.bold())
                     .lineLimit(2)

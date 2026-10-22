@@ -7,6 +7,15 @@ import FocusPilotVault
 import ServiceManagement
 import WidgetKit
 
+enum AutoStartPolicy {
+    static func remainingActiveSeconds(for block: ApprovedBlock, at now: Date) -> Int? {
+        guard block.start <= now, block.end > now else { return nil }
+        let elapsedSeconds = max(0, Int(now.timeIntervalSince(block.start)))
+        let remainingSeconds = block.activeMinutes * 60 - elapsedSeconds
+        return remainingSeconds > 0 ? remainingSeconds : nil
+    }
+}
+
 @MainActor
 final class AppModel: ObservableObject {
     @Published var state = AppState()
@@ -21,13 +30,15 @@ final class AppModel: ObservableObject {
     @Published var lastCompactionMessage: String?
     @Published var startAtLogin = SMAppService.mainApp.status == .enabled
 
-    let calendarService = CalendarService()
-    let focus = FocusController()
+    let calendarService: CalendarService
+    let focus: FocusController
 
     private var vault: VaultStore?
     private var vaultKey: Data?
     private let defaults = UserDefaults.standard
     private var cancellables = Set<AnyCancellable>()
+    private var scheduleTimer: Timer?
+    private var handledBlockIDs = Set<UUID>()
 
     private var deviceID: UUID {
         if let value = defaults.string(forKey: "deviceID"), let id = UUID(uuidString: value) { return id }
@@ -44,12 +55,15 @@ final class AppModel: ObservableObject {
         state.tasks.values.filter { $0.parentID == nil }.sorted { $0.createdAt < $1.createdAt }
     }
 
-    var currentApprovedBlock: ApprovedBlock? {
+    var currentApprovedBlocks: [ApprovedBlock] {
         let now = Date.now
         return state.approvedBlocks.values
             .filter { $0.start <= now && $0.end > now }
             .sorted { $0.start < $1.start }
-            .first
+    }
+
+    var currentApprovedBlock: ApprovedBlock? {
+        currentApprovedBlocks.first
     }
 
     var nextApprovedBlock: ApprovedBlock? {
@@ -57,17 +71,31 @@ final class AppModel: ObservableObject {
     }
 
     var menuTitle: String {
-        if let title = focus.title { return "\(title) · \(focus.displayTime)" }
+        if focus.runningSessions.count == 1, let session = focus.runningSessions.first {
+            return "\(session.record.title) · \(session.displayTime)"
+        }
+        if focus.runningSessions.count > 1 {
+            return "\(focus.runningSessions.count) active tasks"
+        }
         if let block = currentApprovedBlock { return block.title }
         return nextApprovedBlock.map { "Next: \($0.title)" } ?? "FocusPilot"
     }
 
-    init() {
+    init(
+        calendarService: CalendarService = CalendarService(),
+        focus: FocusController = FocusController(),
+        restoreVault: Bool = true
+    ) {
+        self.calendarService = calendarService
+        self.focus = focus
         focus.objectWillChange
             .sink { [weak self] _ in self?.objectWillChange.send() }
             .store(in: &cancellables)
-        focus.onSessionChanged = { [weak self] session in
-            self?.persistSession(session)
+        focus.onSessionStarted = { [weak self] session in
+            self?.persistStartedSession(session)
+        }
+        focus.onSessionFinished = { [weak self] session in
+            self?.persistFinishedSession(session)
         }
         focus.onProjectionChanged = { [weak self] in
             self?.writeWidgetProjection()
@@ -75,7 +103,25 @@ final class AppModel: ObservableObject {
         focus.onNotificationError = { [weak self] message in
             self?.errorMessage = message
         }
-        Task { await restoreVaultIfPossible() }
+        calendarService.$revision
+            .dropFirst()
+            .sink { [weak self] _ in
+                Task { @MainActor in await self?.refreshPlan() }
+            }
+            .store(in: &cancellables)
+        NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)
+            .sink { [weak self] _ in
+                Task { @MainActor in await self?.refreshPlan() }
+            }
+            .store(in: &cancellables)
+        NSWorkspace.shared.notificationCenter.publisher(for: NSWorkspace.didWakeNotification)
+            .sink { [weak self] _ in
+                Task { @MainActor in await self?.refreshPlan() }
+            }
+            .store(in: &cancellables)
+        if restoreVault {
+            Task { await restoreVaultIfPossible() }
+        }
     }
 
     func children(of parentID: UUID) -> [TaskItem] {
@@ -93,6 +139,8 @@ final class AppModel: ObservableObject {
             self.defaults.set(vaultID.uuidString, forKey: "vaultID")
             self.state = await store.currentState()
             self.vaultReady = true
+            self.startScheduleTimer()
+            self.checkAutoStarts()
             self.writeWidgetProjection()
         }
     }
@@ -118,6 +166,8 @@ final class AppModel: ObservableObject {
             self.focus.settings = self.state.notificationSettings
             self.vaultReady = true
             await self.refreshPlan()
+            self.startScheduleTimer()
+            self.checkAutoStarts()
             self.writeWidgetProjection()
         }
     }
@@ -178,28 +228,48 @@ final class AppModel: ObservableObject {
     }
 
     func approveAll() async {
-        await approve(proposals)
+        await approve(proposals.filter { $0.kind != .calendarEvent })
     }
 
-    func start(_ task: TaskItem) {
+    func saveApprovedBlock(_ block: ApprovedBlock) async {
+        guard block.calendarEventReference == nil, block.end > block.start else { return }
+        var changed = block
+        let wallMinutes = max(1, Int(block.end.timeIntervalSince(block.start) / 60))
+        changed.activeMinutes = max(
+            1,
+            FocusTiming.activeMinutes(
+                fittingWallMinutes: wallMinutes,
+                settings: state.notificationSettings
+            )
+        )
+        await mutate(.upsertApprovedBlock(changed))
+    }
+
+    func start(_ block: ApprovedBlock) {
         focus.settings = state.notificationSettings
-        focus.start(taskID: task.id, title: task.title, activeMinutes: task.estimatedMinutes)
+        handledBlockIDs.insert(block.id)
+        focus.start(
+            approvedBlockID: block.id,
+            taskID: block.taskID,
+            title: block.title,
+            activeSeconds: block.activeMinutes * 60
+        )
         writeWidgetProjection()
     }
 
     func startCurrentBlock() {
-        guard let block = currentApprovedBlock ?? nextApprovedBlock else { return }
-        focus.settings = state.notificationSettings
-        focus.start(taskID: block.taskID, title: block.title, activeMinutes: block.activeMinutes)
-        writeWidgetProjection()
+        let block = currentApprovedBlocks.first { !focus.contains(approvedBlockID: $0.id) }
+            ?? nextApprovedBlock
+        guard let block else { return }
+        start(block)
     }
 
-    func toggleFocusPause() {
-        focus.togglePause()
+    func toggleFocusPause(sessionID: UUID) {
+        focus.togglePause(sessionID: sessionID)
     }
 
-    func stopFocus() {
-        focus.stop()
+    func stopFocus(sessionID: UUID) {
+        focus.stop(sessionID: sessionID)
     }
 
     func requestNotificationAccess() async {
@@ -239,9 +309,24 @@ final class AppModel: ObservableObject {
 
     func refreshPlan() async {
         guard vaultReady else { return }
-        let end = Calendar.current.date(byAdding: .day, value: 7, to: .now) ?? .now
-        let busy = calendarService.busyIntervals(from: .now, to: end)
+        let now = Date.now
+        let end = Calendar.current.date(byAdding: .day, value: 7, to: now) ?? now
+        let latestLinkedEnd = state.approvedBlocks.values
+            .filter { $0.calendarEventReference != nil && $0.end > now }
+            .map(\.end)
+            .max() ?? end
+        let reconciliationEnd = Calendar.current.date(
+            byAdding: .day,
+            value: 7,
+            to: max(end, latestLinkedEnd)
+        ) ?? max(end, latestLinkedEnd)
+        let queryStart = Calendar.current.date(byAdding: .day, value: -1, to: now) ?? now
+        let calendarEvents = calendarService.events(from: queryStart, to: reconciliationEnd)
+        await reconcileCalendarBlocks(with: calendarEvents, now: now)
+        let planningEvents = calendarEvents.filter { $0.end > now && $0.start < end }
+        let busy = calendarService.busyIntervals(from: planningEvents)
         let result = TaskPlanner().generate(.init(
+            now: now,
             tasks: Array(state.tasks.values),
             commitments: Array(state.weeklyCommitments.values),
             approvedBlocks: Array(state.approvedBlocks.values),
@@ -250,8 +335,27 @@ final class AppModel: ObservableObject {
             settings: state.plannerSettings,
             notificationSettings: state.notificationSettings
         ))
-        proposals = result.proposals
+        let calendarProposals = planningEvents
+            .filter { event in
+                !state.approvedBlocks.values.contains { block in
+                    guard let reference = block.calendarEventReference else { return false }
+                    return calendarService.representsSameOccurrence(reference: reference, event: event)
+                }
+            }
+            .map { event in
+                ProposedBlock(
+                    taskID: nil,
+                    title: event.title,
+                    start: event.start,
+                    end: event.end,
+                    activeMinutes: max(1, Int(event.end.timeIntervalSince(event.start) / 60)),
+                    kind: .calendarEvent,
+                    calendarEventReference: event.reference
+                )
+            }
+        proposals = (result.proposals + calendarProposals).sorted { $0.start < $1.start }
         unscheduledTaskIDs = result.unscheduledTaskIDs
+        checkAutoStarts(at: now)
     }
 
     func updateNotificationSettings(_ settings: NotificationSettings) async {
@@ -342,12 +446,107 @@ final class AppModel: ObservableObject {
         }
     }
 
-    private func persistSession(_ session: FocusSession) {
+    private func persistStartedSession(_ session: FocusSession) {
+        Task { await mutate(.upsertFocusSession(session)) }
+    }
+
+    private func persistFinishedSession(_ session: FocusSession) {
         Task {
             await mutate(.upsertFocusSession(session))
             if let taskID = session.taskID {
                 await mutate(.addCompletionRecord(.init(taskID: taskID, activeMinutes: session.activeSeconds / 60)))
             }
+        }
+    }
+
+    func checkAutoStarts(at now: Date = .now) {
+        guard vaultReady else { return }
+        let dueBlocks = state.approvedBlocks.values
+            .filter { $0.start <= now && $0.end > now }
+            .sorted { $0.start < $1.start }
+
+        for block in dueBlocks {
+            guard !focus.contains(approvedBlockID: block.id),
+                  !handledBlockIDs.contains(block.id) else { continue }
+            let sessions = state.focusSessions.values
+                .filter { $0.approvedBlockID == block.id }
+                .sorted { $0.startedAt < $1.startedAt }
+            if sessions.contains(where: { $0.endedAt != nil }) {
+                handledBlockIDs.insert(block.id)
+                continue
+            }
+
+            guard let remainingSeconds = AutoStartPolicy.remainingActiveSeconds(for: block, at: now) else {
+                handledBlockIDs.insert(block.id)
+                continue
+            }
+
+            handledBlockIDs.insert(block.id)
+            focus.settings = state.notificationSettings
+            focus.start(
+                approvedBlockID: block.id,
+                taskID: block.taskID,
+                title: block.title,
+                activeSeconds: remainingSeconds,
+                existingSession: sessions.first(where: { $0.endedAt == nil })
+            )
+        }
+        writeWidgetProjection()
+    }
+
+    private func startScheduleTimer() {
+        guard scheduleTimer == nil else { return }
+        scheduleTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
+            Task { @MainActor in self?.checkAutoStarts() }
+        }
+        RunLoop.main.add(scheduleTimer!, forMode: .common)
+    }
+
+    private func reconcileCalendarBlocks(
+        with events: [CalendarEventSnapshot],
+        now: Date
+    ) async {
+        guard calendarService.hasFullAccess, let vault else { return }
+        let startedBlockIDs = Set(
+            state.focusSessions.values.compactMap(\.approvedBlockID)
+                + focus.runningSessions.compactMap { $0.record.approvedBlockID }
+        )
+        var changed = false
+
+        for block in state.approvedBlocks.values where block.end > now {
+            guard let reference = block.calendarEventReference,
+                  !startedBlockIDs.contains(block.id) else { continue }
+            guard let event = calendarService.resolve(reference: reference, in: events) else {
+                do {
+                    try await vault.append(.deleteApprovedBlock(block.id))
+                    changed = true
+                } catch {
+                    errorMessage = "Could not remove a deleted Calendar event: \(error.localizedDescription)"
+                    return
+                }
+                continue
+            }
+
+            var updated = block
+            updated.title = event.title
+            updated.start = event.start
+            updated.end = event.end
+            updated.activeMinutes = max(1, Int(event.end.timeIntervalSince(event.start) / 60))
+            updated.calendarEventReference = event.reference
+            if updated != block {
+                do {
+                    try await vault.append(.upsertApprovedBlock(updated))
+                    changed = true
+                } catch {
+                    errorMessage = "Could not synchronize a Calendar event: \(error.localizedDescription)"
+                    return
+                }
+            }
+        }
+
+        if changed {
+            state = await vault.currentState()
+            writeWidgetProjection()
         }
     }
 
@@ -366,13 +565,23 @@ final class AppModel: ObservableObject {
 
     private func writeWidgetProjection() {
         let tasks = state.tasks.values.sorted { $0.updatedAt > $1.updatedAt }
+        let runningTasks = focus.runningSessions.map { session in
+            WidgetRunningTask(
+                id: session.id,
+                title: session.record.title,
+                projectedEnd: focus.projectedEnd(for: session.id),
+                isPaused: session.isPaused
+            )
+        }
+        let firstRunning = runningTasks.first
         let projection = WidgetProjection(
-            currentTitle: focus.title ?? currentApprovedBlock?.title,
-            currentEnd: focus.projectedEnd ?? currentApprovedBlock?.end,
+            currentTitle: firstRunning?.title ?? currentApprovedBlock?.title,
+            currentEnd: firstRunning?.projectedEnd ?? currentApprovedBlock?.end,
             completedCount: tasks.filter(\.isCompleted).count,
             totalCount: tasks.count,
             tasks: tasks.prefix(8).map { .init(id: $0.id, title: $0.title, isCompleted: $0.isCompleted) },
-            hideTitles: hideWidgetTitles
+            hideTitles: hideWidgetTitles,
+            runningTasks: runningTasks
         )
         guard let url = widgetProjectionURL() else { return }
         try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)

@@ -118,6 +118,26 @@ public struct DailyWorkingHours: Codable, Hashable, Sendable {
 public enum PlannedBlockKind: String, Codable, Sendable {
     case task
     case deepThinking
+    case calendarEvent
+}
+
+public struct CalendarEventReference: Codable, Hashable, Sendable {
+    public var calendarIdentifier: String
+    public var eventIdentifier: String?
+    public var externalIdentifier: String?
+    public var occurrenceStart: Date
+
+    public init(
+        calendarIdentifier: String,
+        eventIdentifier: String?,
+        externalIdentifier: String?,
+        occurrenceStart: Date
+    ) {
+        self.calendarIdentifier = calendarIdentifier
+        self.eventIdentifier = eventIdentifier
+        self.externalIdentifier = externalIdentifier
+        self.occurrenceStart = occurrenceStart
+    }
 }
 
 public struct ProposedBlock: Codable, Identifiable, Hashable, Sendable {
@@ -128,6 +148,7 @@ public struct ProposedBlock: Codable, Identifiable, Hashable, Sendable {
     public var end: Date
     public var activeMinutes: Int
     public var kind: PlannedBlockKind
+    public var calendarEventReference: CalendarEventReference?
 
     public init(
         id: UUID = UUID(),
@@ -136,7 +157,8 @@ public struct ProposedBlock: Codable, Identifiable, Hashable, Sendable {
         start: Date,
         end: Date,
         activeMinutes: Int,
-        kind: PlannedBlockKind
+        kind: PlannedBlockKind,
+        calendarEventReference: CalendarEventReference? = nil
     ) {
         self.id = id
         self.taskID = taskID
@@ -145,6 +167,7 @@ public struct ProposedBlock: Codable, Identifiable, Hashable, Sendable {
         self.end = end
         self.activeMinutes = activeMinutes
         self.kind = kind
+        self.calendarEventReference = calendarEventReference
     }
 }
 
@@ -157,6 +180,7 @@ public struct ApprovedBlock: Codable, Identifiable, Hashable, Sendable {
     public var activeMinutes: Int
     public var kind: PlannedBlockKind
     public var hasCalendarConflict: Bool
+    public var calendarEventReference: CalendarEventReference?
 
     public init(
         id: UUID = UUID(),
@@ -166,7 +190,8 @@ public struct ApprovedBlock: Codable, Identifiable, Hashable, Sendable {
         end: Date,
         activeMinutes: Int,
         kind: PlannedBlockKind,
-        hasCalendarConflict: Bool = false
+        hasCalendarConflict: Bool = false,
+        calendarEventReference: CalendarEventReference? = nil
     ) {
         self.id = id
         self.taskID = taskID
@@ -176,6 +201,7 @@ public struct ApprovedBlock: Codable, Identifiable, Hashable, Sendable {
         self.activeMinutes = activeMinutes
         self.kind = kind
         self.hasCalendarConflict = hasCalendarConflict
+        self.calendarEventReference = calendarEventReference
     }
 
     public init(proposal: ProposedBlock) {
@@ -185,7 +211,8 @@ public struct ApprovedBlock: Codable, Identifiable, Hashable, Sendable {
             start: proposal.start,
             end: proposal.end,
             activeMinutes: proposal.activeMinutes,
-            kind: proposal.kind
+            kind: proposal.kind,
+            calendarEventReference: proposal.calendarEventReference
         )
     }
 }
@@ -193,6 +220,7 @@ public struct ApprovedBlock: Codable, Identifiable, Hashable, Sendable {
 public struct FocusSession: Codable, Identifiable, Hashable, Sendable {
     public var id: UUID
     public var taskID: UUID?
+    public var approvedBlockID: UUID?
     public var title: String
     public var startedAt: Date
     public var endedAt: Date?
@@ -201,6 +229,7 @@ public struct FocusSession: Codable, Identifiable, Hashable, Sendable {
     public init(
         id: UUID = UUID(),
         taskID: UUID?,
+        approvedBlockID: UUID? = nil,
         title: String,
         startedAt: Date = .now,
         endedAt: Date? = nil,
@@ -208,6 +237,7 @@ public struct FocusSession: Codable, Identifiable, Hashable, Sendable {
     ) {
         self.id = id
         self.taskID = taskID
+        self.approvedBlockID = approvedBlockID
         self.title = title
         self.startedAt = startedAt
         self.endedAt = endedAt
@@ -270,6 +300,8 @@ public struct NotificationSettings: Codable, Hashable, Sendable {
 }
 
 public struct AppState: Codable, Equatable, Sendable {
+    public static let currentSchemaVersion = 2
+
     public var schemaVersion: Int
     public var tasks: [UUID: TaskItem]
     public var weeklyCommitments: [UUID: WeeklyCommitment]
@@ -280,7 +312,7 @@ public struct AppState: Codable, Equatable, Sendable {
     public var notificationSettings: NotificationSettings
 
     public init(
-        schemaVersion: Int = 1,
+        schemaVersion: Int = Self.currentSchemaVersion,
         tasks: [UUID: TaskItem] = [:],
         weeklyCommitments: [UUID: WeeklyCommitment] = [:],
         approvedBlocks: [UUID: ApprovedBlock] = [:],

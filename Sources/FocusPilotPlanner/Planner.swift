@@ -11,6 +11,21 @@ public struct BusyInterval: Hashable, Sendable {
     }
 }
 
+public enum FocusTiming {
+    public static func wallMinutes(for activeMinutes: Int, settings: NotificationSettings) -> Int {
+        guard activeMinutes > 0 else { return 0 }
+        let completedIntervalsBeforeEnd = (activeMinutes - 1) / settings.focusIntervalMinutes
+        return activeMinutes + completedIntervalsBeforeEnd * settings.breakMinutes
+    }
+
+    public static func activeMinutes(fittingWallMinutes wallMinutes: Int, settings: NotificationSettings) -> Int {
+        guard wallMinutes > 0 else { return 0 }
+        return (1...wallMinutes).reversed().first {
+            self.wallMinutes(for: $0, settings: settings) <= wallMinutes
+        } ?? 0
+    }
+}
+
 public struct PlanRequest: Sendable {
     public var now: Date
     public var days: Int
@@ -232,7 +247,7 @@ public struct TaskPlanner: Sendable {
                   $0.kind == .deepThinking && request.calendar.isDate($0.start, inSameDayAs: day)
               }) else { return nil }
         let activeMinutes = request.settings.deepThinkingMinutes
-        let wallMinutes = wallMinutes(for: activeMinutes, settings: request.notificationSettings)
+        let wallMinutes = FocusTiming.wallMinutes(for: activeMinutes, settings: request.notificationSettings)
         guard let interval = free.first(where: { minutes(in: $0) >= wallMinutes }) else { return nil }
         let end = interval.start.addingTimeInterval(TimeInterval(wallMinutes * 60))
         return ProposedBlock(
@@ -256,7 +271,7 @@ public struct TaskPlanner: Sendable {
             var candidate = roundDown(preferredActiveMinutes, to: granularity)
             candidate = max(minimumActiveMinutes, candidate)
             while candidate >= minimumActiveMinutes {
-                let wall = wallMinutes(for: candidate, settings: notificationSettings)
+                let wall = FocusTiming.wallMinutes(for: candidate, settings: notificationSettings)
                 if minutes(in: interval) >= wall {
                     return (
                         BusyInterval(
@@ -270,12 +285,6 @@ public struct TaskPlanner: Sendable {
             }
         }
         return nil
-    }
-
-    private func wallMinutes(for activeMinutes: Int, settings: NotificationSettings) -> Int {
-        guard activeMinutes > 0 else { return 0 }
-        let completedIntervalsBeforeEnd = (activeMinutes - 1) / settings.focusIntervalMinutes
-        return activeMinutes + completedIntervalsBeforeEnd * settings.breakMinutes
     }
 
     private func roundDown(_ value: Int, to granularity: Int) -> Int {

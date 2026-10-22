@@ -12,6 +12,11 @@ struct SettingsView: View {
                     get: { model.startAtLogin },
                     set: { model.setStartAtLogin($0) }
                 ))
+                if !model.startAtLogin {
+                    Text("Enable Start at Login so approved tasks can auto-start on schedule after you sign in.")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                }
             }
 
             Section("Working hours") {

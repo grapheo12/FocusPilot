@@ -9,6 +9,18 @@ private func fixedCalendar() -> Calendar {
     return calendar
 }
 
+@Test func activeMinutesFitEditedWallClockRange() {
+    let settings = NotificationSettings(
+        nagIntervalMinutes: 15,
+        focusIntervalMinutes: 30,
+        breakMinutes: 5
+    )
+
+    #expect(FocusTiming.wallMinutes(for: 60, settings: settings) == 65)
+    #expect(FocusTiming.activeMinutes(fittingWallMinutes: 65, settings: settings) == 60)
+    #expect(FocusTiming.activeMinutes(fittingWallMinutes: 64, settings: settings) == 59)
+}
+
 @Test func proposesDeepThinkingBeforeFlexibleTasks() throws {
     let calendar = fixedCalendar()
     let now = try #require(calendar.date(from: DateComponents(year: 2026, month: 10, day: 19, hour: 8)))

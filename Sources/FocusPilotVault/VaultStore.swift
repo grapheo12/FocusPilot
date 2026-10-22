@@ -296,6 +296,8 @@ public actor VaultStore {
             let envelope = try JSONDecoder.vaultDecoder.decode(EncryptedEnvelope.self, from: Data(contentsOf: url))
             return try VaultCrypto.decrypt(VaultOperation.self, envelope: envelope, key: key)
         }
-        return StateReducer.reduce(base: state, frontier: frontier, operations: operations)
+        var reduction = StateReducer.reduce(base: state, frontier: frontier, operations: operations)
+        reduction.state.schemaVersion = AppState.currentSchemaVersion
+        return reduction
     }
 }

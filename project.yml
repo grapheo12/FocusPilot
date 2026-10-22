@@ -24,8 +24,8 @@ targets:
     info:
       path: Configuration/FocusPilot-Info.plist
       properties:
-        CFBundleShortVersionString: "1.0.1"
-        CFBundleVersion: "2"
+        CFBundleShortVersionString: "1.1.0"
+        CFBundleVersion: "3"
         NSCalendarsFullAccessUsageDescription: FocusPilot reads your calendar to avoid scheduling tasks during existing events and to suggest available focus time.
     entitlements:
       path: Configuration/FocusPilot.entitlements
@@ -53,8 +53,8 @@ targets:
     info:
       path: Configuration/FocusPilotWidget-Info.plist
       properties:
-        CFBundleShortVersionString: "1.0.1"
-        CFBundleVersion: "2"
+        CFBundleShortVersionString: "1.1.0"
+        CFBundleVersion: "3"
         NSExtension:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
     entitlements:

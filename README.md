@@ -9,8 +9,8 @@ FocusPilot is productivity software, not a diagnostic or medical tool.
 ### Menu-bar workflow
 
 - Capture a task without leaving the app you are using.
-- See the current approved task and its remaining focus time.
-- Start, pause, resume, stop, complete, or switch tasks from the menu bar.
+- See every currently running approved task and its individual remaining focus time.
+- Pause, resume, and stop overlapping tasks independently from the menu bar.
 - See the next scheduled task when no focus session is active.
 - Launch automatically when you sign in to macOS.
 
@@ -28,6 +28,8 @@ FocusPilot is productivity software, not a diagnostic or medical tool.
 
 - Read busy intervals from user-selected Apple Calendar sources using EventKit.
 - Keep Calendar access read-only; FocusPilot never edits Calendar events.
+- Show timed and all-day Calendar events as individually approvable suggestions.
+- Keep approved Calendar blocks synchronized with renamed, moved, and deleted source events.
 - Generate a rolling seven-day plan inside configurable working hours.
 - Avoid Calendar events and already approved task blocks.
 - Prioritize urgent work, deadlines, and outstanding weekly commitments.
@@ -36,12 +38,15 @@ FocusPilot is productivity software, not a diagnostic or medical tool.
 - Require explicit approval for deep-thinking and other remaining suggestions.
 - Show tasks that could not fit into the available week.
 - Include planned five-minute breaks when calculating wall-clock block lengths.
+- Edit the start and end times of approved task and deep-thinking blocks.
+- Automatically start every due approved block, including overlaps, while FocusPilot is running.
 
 ### Focus and break reminders
 
-- Send a Time Sensitive `Are you working on X?` notification every 15 active-focus minutes by default.
+- Run multiple independent active-time countdowns at once.
+- Send one combined Time Sensitive reminder for all active tasks every 15 focus minutes by default.
 - Keep the reminder interval configurable from 5 to 60 minutes.
-- Pause after 30 active-focus minutes by default and notify you to take a five-minute break.
+- Pause all running clocks on one shared five-minute break after 30 wall-clock focus minutes by default.
 - Configure focus intervals and break lengths independently.
 - Suppress task nags during breaks and resume the same task afterward.
 - Present reminders even while FocusPilot is in the foreground and report disabled notification permissions.
@@ -49,7 +54,7 @@ FocusPilot is productivity software, not a diagnostic or medical tool.
 ### Widgets
 
 - Provide small and medium widgets for the macOS desktop and Notification Center.
-- Show the current task, countdown, finished count, unfinished count, and recent tasks.
+- Show multiple running tasks, countdowns, finished count, unfinished count, and recent tasks.
 - Hide task titles with a privacy setting.
 - Share a platform-neutral widget projection suitable for a future iOS lock-screen widget.
 

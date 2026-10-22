@@ -10,23 +10,32 @@ struct MenuBarView: View {
             if !model.vaultReady {
                 Label("Open FocusPilot to configure your vault", systemImage: "lock.doc")
                     .foregroundStyle(.secondary)
-            } else if let title = model.focus.title {
-                HStack {
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(model.focus.phase == .breakTime ? "Break" : "Current task")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                        Text(title).font(.headline).lineLimit(2)
+            } else if !model.focus.runningSessions.isEmpty {
+                if model.focus.phase == .breakTime {
+                    HStack {
+                        Label("Shared break", systemImage: "cup.and.saucer.fill")
+                        Spacer()
+                        Text(model.focus.sharedBreakDisplayTime)
+                            .monospacedDigit()
                     }
-                    Spacer()
-                    Text(model.focus.displayTime)
-                        .font(.title2.monospacedDigit())
                 }
-                HStack {
-                    Button(model.focus.phase == .paused ? "Resume" : "Pause") {
-                        model.toggleFocusPause()
+                ForEach(model.focus.runningSessions) { session in
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack {
+                            Text(session.record.title).font(.headline).lineLimit(1)
+                            Spacer()
+                            Text(model.focus.phase == .breakTime ? "Break" : session.displayTime)
+                                .monospacedDigit()
+                        }
+                        HStack {
+                            Button(session.isPaused ? "Resume" : "Pause") {
+                                model.toggleFocusPause(sessionID: session.id)
+                            }
+                            Button("Stop", role: .destructive) {
+                                model.stopFocus(sessionID: session.id)
+                            }
+                        }
                     }
-                    Button("Stop", role: .destructive) { model.stopFocus() }
                 }
             } else if let block = model.currentApprovedBlock ?? model.nextApprovedBlock {
                 VStack(alignment: .leading, spacing: 3) {
@@ -62,9 +71,6 @@ struct MenuBarView: View {
                         }
                         .buttonStyle(.plain)
                         Text(task.title).lineLimit(1)
-                        Spacer()
-                        Button { model.start(task) } label: { Image(systemName: "play.fill") }
-                            .buttonStyle(.borderless)
                     }
                 }
             }
