@@ -273,7 +273,7 @@
 				COMBINE_HIDPI_IMAGES = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
-				FOCUSPILOT_APP_GROUP = group.com.focuspilot.shared;
+				FOCUSPILOT_APP_GROUP = "$(DEVELOPMENT_TEAM).group.com.focuspilot.shared";
 				INFOPLIST_FILE = "Configuration/FocusPilot-Info.plist";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -350,7 +350,7 @@
 				CODE_SIGN_ENTITLEMENTS = Configuration/FocusPilotWidget.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				FOCUSPILOT_APP_GROUP = group.com.focuspilot.shared;
+				FOCUSPILOT_APP_GROUP = "$(DEVELOPMENT_TEAM).group.com.focuspilot.shared";
 				INFOPLIST_FILE = "Configuration/FocusPilotWidget-Info.plist";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -373,7 +373,7 @@
 				CODE_SIGN_ENTITLEMENTS = Configuration/FocusPilotWidget.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				FOCUSPILOT_APP_GROUP = group.com.focuspilot.shared;
+				FOCUSPILOT_APP_GROUP = "$(DEVELOPMENT_TEAM).group.com.focuspilot.shared";
 				INFOPLIST_FILE = "Configuration/FocusPilotWidget-Info.plist";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -399,7 +399,7 @@
 				COMBINE_HIDPI_IMAGES = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
-				FOCUSPILOT_APP_GROUP = group.com.focuspilot.shared;
+				FOCUSPILOT_APP_GROUP = "$(DEVELOPMENT_TEAM).group.com.focuspilot.shared";
 				INFOPLIST_FILE = "Configuration/FocusPilot-Info.plist";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",

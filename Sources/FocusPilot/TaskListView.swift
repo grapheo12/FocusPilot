@@ -10,7 +10,7 @@ struct TaskListView: View {
             HStack {
                 Text("Tasks").font(.largeTitle.bold())
                 Spacer()
-                Text("\(model.incompleteTasks.count) unfinished")
+                Text("\(model.oneOffTasks.filter { !$0.isCompleted }.count) one-off · \(model.recurringTasks.count) recurring")
                     .foregroundStyle(.secondary)
             }
             HStack {
@@ -21,12 +21,38 @@ struct TaskListView: View {
                     .buttonStyle(.borderedProminent)
             }
             List {
-                ForEach(model.rootTasks) { task in
-                    TaskTreeRow(model: model, task: task, depth: 0)
+                Section {
+                    if model.oneOffRootTasks.isEmpty {
+                        Text("No one-off tasks")
+                            .foregroundStyle(.secondary)
+                    } else {
+                        ForEach(model.oneOffRootTasks) { task in
+                            TaskTreeRow(model: model, task: task, kind: .oneOff)
+                        }
+                    }
+                } header: {
+                    Text("One-off Tasklist")
+                } footer: {
+                    Text("Completed tasks are removed after the next local midnight.")
+                }
+
+                Section {
+                    if model.recurringRootTasks.isEmpty {
+                        Text("No recurring tasks")
+                            .foregroundStyle(.secondary)
+                    } else {
+                        ForEach(model.recurringRootTasks) { task in
+                            TaskTreeRow(model: model, task: task, kind: .recurring)
+                        }
+                    }
+                } header: {
+                    Text("Recurring Tasklist")
+                } footer: {
+                    Text("Focused time resets every Monday.")
                 }
             }
             .overlay {
-                if model.rootTasks.isEmpty {
+                if model.state.tasks.isEmpty {
                     ContentUnavailableView("No tasks yet", systemImage: "checklist", description: Text("Add one small, concrete next action."))
                 }
             }
@@ -43,18 +69,18 @@ struct TaskListView: View {
 private struct TaskTreeRow: View {
     @ObservedObject var model: AppModel
     let task: TaskItem
-    let depth: Int
+    let kind: TaskListKind
     @State private var isExpanded = true
     @State private var addingChild = false
     @State private var childTitle = ""
     @State private var editing = false
 
-    private var children: [TaskItem] { model.children(of: task.id) }
+    private var children: [TaskItem] { model.children(of: task.id, in: kind) }
 
     var body: some View {
         DisclosureGroup(isExpanded: $isExpanded) {
             ForEach(children) { child in
-                TaskTreeRow(model: model, task: child, depth: depth + 1)
+                TaskTreeRow(model: model, task: child, kind: kind)
             }
             if addingChild {
                 HStack {
@@ -67,19 +93,27 @@ private struct TaskTreeRow: View {
             }
         } label: {
             HStack(spacing: 10) {
-                Button {
-                    Task { await model.toggleTask(task) }
-                } label: {
-                    Image(systemName: task.isCompleted ? "checkmark.circle.fill" : "circle")
-                        .foregroundStyle(task.isCompleted ? .green : .secondary)
+                if kind == .oneOff {
+                    Button {
+                        Task { await model.toggleTask(task) }
+                    } label: {
+                        Image(systemName: task.isCompleted ? "checkmark.circle.fill" : "circle")
+                            .foregroundStyle(task.isCompleted ? .green : .secondary)
+                    }
+                    .buttonStyle(.plain)
+                } else {
+                    Image(systemName: "repeat.circle.fill")
+                        .foregroundStyle(.blue)
                 }
-                .buttonStyle(.plain)
                 VStack(alignment: .leading) {
                     Text(task.title)
                         .strikethrough(task.isCompleted)
                     HStack(spacing: 8) {
                         Text("\(task.estimatedMinutes)m")
                         Text(task.priorityLabel)
+                        if kind == .recurring {
+                            Text("This week: \(model.weeklyProgressLabel(for: task.id))")
+                        }
                     }
                     .font(.caption)
                     .foregroundStyle(.secondary)

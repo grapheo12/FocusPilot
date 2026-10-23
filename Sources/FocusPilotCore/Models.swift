@@ -52,6 +52,7 @@ public struct TaskItem: Codable, Identifiable, Hashable, Sendable {
     public var recurrence: RecurrenceRule
     public var createdAt: Date
     public var updatedAt: Date
+    public var completedAt: Date?
 
     public init(
         id: UUID = UUID(),
@@ -65,7 +66,8 @@ public struct TaskItem: Codable, Identifiable, Hashable, Sendable {
         deadline: Date? = nil,
         recurrence: RecurrenceRule = .none,
         createdAt: Date = .now,
-        updatedAt: Date = .now
+        updatedAt: Date = .now,
+        completedAt: Date? = nil
     ) {
         self.id = id
         self.parentID = parentID
@@ -79,6 +81,7 @@ public struct TaskItem: Codable, Identifiable, Hashable, Sendable {
         self.recurrence = recurrence
         self.createdAt = createdAt
         self.updatedAt = updatedAt
+        self.completedAt = completedAt
     }
 }
 
@@ -300,7 +303,7 @@ public struct NotificationSettings: Codable, Hashable, Sendable {
 }
 
 public struct AppState: Codable, Equatable, Sendable {
-    public static let currentSchemaVersion = 2
+    public static let currentSchemaVersion = 3
 
     public var schemaVersion: Int
     public var tasks: [UUID: TaskItem]

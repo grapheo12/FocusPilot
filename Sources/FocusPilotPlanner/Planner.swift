@@ -80,10 +80,45 @@ public enum WeeklyProgress {
         records: [CompletionRecord],
         calendar: Calendar
     ) -> Int {
-        guard let interval = calendar.dateInterval(of: .weekOfYear, for: date) else { return 0 }
+        guard let interval = WorkingWeek.interval(containing: date, calendar: calendar) else { return 0 }
         return records
             .filter { $0.taskID == taskID && interval.contains($0.completedAt) }
             .reduce(0) { $0 + $1.activeMinutes }
+    }
+
+    public static func focusedMinutes(
+        taskID: UUID,
+        containing date: Date,
+        records: [CompletionRecord],
+        runningSessions: [FocusSession],
+        calendar: Calendar
+    ) -> Int {
+        let completed = completedMinutes(
+            taskID: taskID,
+            containing: date,
+            records: records,
+            calendar: calendar
+        )
+        guard let interval = WorkingWeek.interval(containing: date, calendar: calendar) else {
+            return completed
+        }
+        let liveSeconds = runningSessions.reduce(0) { total, session in
+            guard session.taskID == taskID,
+                  session.endedAt == nil,
+                  session.startedAt < interval.end,
+                  date >= interval.start else {
+                return total
+            }
+            if interval.contains(session.startedAt) {
+                return total + session.activeSeconds
+            }
+            let elapsedInsideWeek = max(
+                0,
+                Int(min(date, interval.end).timeIntervalSince(max(session.startedAt, interval.start)))
+            )
+            return total + min(session.activeSeconds, elapsedInsideWeek)
+        }
+        return completed + liveSeconds / 60
     }
 }
 
@@ -162,7 +197,8 @@ public struct TaskPlanner: Sendable {
 
     private func initialDemand(request: PlanRequest) -> [UUID: Int] {
         var result: [UUID: Int] = [:]
-        for task in request.tasks where !task.isCompleted {
+        let committedTaskIDs = Set(request.commitments.map(\.taskID))
+        for task in request.tasks where !task.isCompleted && !committedTaskIDs.contains(task.id) {
             result[task.id] = task.estimatedMinutes
         }
 
@@ -173,7 +209,7 @@ public struct TaskPlanner: Sendable {
                 records: request.completionRecords,
                 calendar: request.calendar
             )
-            result[commitment.taskID] = max(result[commitment.taskID, default: 0], commitment.targetMinutes - completed)
+            result[commitment.taskID] = max(0, commitment.targetMinutes - completed)
         }
 
         for task in request.tasks where !isRecurring(task) {

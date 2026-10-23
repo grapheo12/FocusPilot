@@ -84,6 +84,88 @@ import Testing
     #expect(decodedLegacySession.approvedBlockID == nil)
 }
 
+@Test func legacyTasksDecodeWithoutCompletionTimestamp() throws {
+    let task = TaskItem(title: "Legacy", isCompleted: true)
+    var object = try #require(
+        JSONSerialization.jsonObject(with: JSONEncoder().encode(task)) as? [String: Any]
+    )
+    object.removeValue(forKey: "completedAt")
+
+    let data = try JSONSerialization.data(withJSONObject: object)
+    let decoded = try JSONDecoder().decode(TaskItem.self, from: data)
+
+    #expect(decoded.isCompleted)
+    #expect(decoded.completedAt == nil)
+    #expect(TaskRetentionPolicy.completionDate(for: decoded) == decoded.updatedAt)
+}
+
+@Test func completedOneOffTasksExpireAfterTheNextMidnight() throws {
+    var calendar = Calendar(identifier: .gregorian)
+    calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+    let completedAt = try #require(calendar.date(from: DateComponents(
+        year: 2026,
+        month: 10,
+        day: 21,
+        hour: 23,
+        minute: 59
+    )))
+    let sameDay = try #require(calendar.date(from: DateComponents(
+        year: 2026,
+        month: 10,
+        day: 21,
+        hour: 23,
+        minute: 59,
+        second: 30
+    )))
+    let nextDay = try #require(calendar.date(from: DateComponents(
+        year: 2026,
+        month: 10,
+        day: 22
+    )))
+    let task = TaskItem(
+        title: "Done",
+        isCompleted: true,
+        updatedAt: completedAt,
+        completedAt: completedAt
+    )
+
+    #expect(!TaskRetentionPolicy.shouldDelete(
+        task,
+        hasWeeklyCommitment: false,
+        at: sameDay,
+        calendar: calendar
+    ))
+    #expect(TaskRetentionPolicy.shouldDelete(
+        task,
+        hasWeeklyCommitment: false,
+        at: nextDay,
+        calendar: calendar
+    ))
+    #expect(!TaskRetentionPolicy.shouldDelete(
+        task,
+        hasWeeklyCommitment: true,
+        at: nextDay,
+        calendar: calendar
+    ))
+}
+
+@Test func workingWeekAlwaysStartsOnMonday() throws {
+    var calendar = Calendar(identifier: .gregorian)
+    calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+    calendar.firstWeekday = Weekday.sunday.rawValue
+    let wednesday = try #require(calendar.date(from: DateComponents(
+        year: 2026,
+        month: 10,
+        day: 21,
+        hour: 12
+    )))
+    let interval = try #require(WorkingWeek.interval(containing: wednesday, calendar: calendar))
+
+    #expect(calendar.component(.weekday, from: interval.start) == Weekday.monday.rawValue)
+    #expect(calendar.component(.day, from: interval.start) == 19)
+    #expect(calendar.component(.day, from: interval.end) == 26)
+}
+
 @Test func parentAndChildCompletionRemainIndependent() {
     let deviceID = UUID()
     let parent = TaskItem(title: "Parent", isCompleted: true)

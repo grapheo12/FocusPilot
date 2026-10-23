@@ -25,6 +25,11 @@ enum PlanVisibility {
     }
 }
 
+enum TaskListKind: Equatable {
+    case oneOff
+    case recurring
+}
+
 @MainActor
 final class AppModel: ObservableObject {
     @Published var state = AppState()
@@ -49,6 +54,8 @@ final class AppModel: ObservableObject {
     private let defaults = UserDefaults.standard
     private var cancellables = Set<AnyCancellable>()
     private var scheduleTimer: Timer?
+    private var nextTaskCleanupDate: Date?
+    private var isPerformingTaskMaintenance = false
     private var handledBlockIDs = Set<UUID>()
     private var projectedCurrentBlockIDs = Set<UUID>()
 
@@ -65,6 +72,22 @@ final class AppModel: ObservableObject {
 
     var rootTasks: [TaskItem] {
         state.tasks.values.filter { $0.parentID == nil }.sorted { $0.createdAt < $1.createdAt }
+    }
+
+    var oneOffTasks: [TaskItem] {
+        tasks(in: .oneOff)
+    }
+
+    var recurringTasks: [TaskItem] {
+        tasks(in: .recurring)
+    }
+
+    var oneOffRootTasks: [TaskItem] {
+        roots(in: .oneOff)
+    }
+
+    var recurringRootTasks: [TaskItem] {
+        roots(in: .recurring)
     }
 
     var currentApprovedBlocks: [ApprovedBlock] {
@@ -127,12 +150,18 @@ final class AppModel: ObservableObject {
             .store(in: &cancellables)
         NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)
             .sink { [weak self] _ in
-                Task { @MainActor in await self?.refreshPlan() }
+                Task { @MainActor in
+                    await self?.performTaskMaintenance(force: true)
+                    await self?.refreshPlan()
+                }
             }
             .store(in: &cancellables)
         NSWorkspace.shared.notificationCenter.publisher(for: NSWorkspace.didWakeNotification)
             .sink { [weak self] _ in
-                Task { @MainActor in await self?.refreshPlan() }
+                Task { @MainActor in
+                    await self?.performTaskMaintenance(force: true)
+                    await self?.refreshPlan()
+                }
             }
             .store(in: &cancellables)
         if restoreVault {
@@ -144,8 +173,52 @@ final class AppModel: ObservableObject {
         state.tasks.values.filter { $0.parentID == parentID }.sorted { $0.createdAt < $1.createdAt }
     }
 
+    func children(of parentID: UUID, in kind: TaskListKind) -> [TaskItem] {
+        children(of: parentID).filter { taskListKind(for: $0) == kind }
+    }
+
+    func taskListKind(for task: TaskItem) -> TaskListKind {
+        weeklyCommitment(for: task.id) == nil ? .oneOff : .recurring
+    }
+
+    func weeklyProgressLabel(for taskID: UUID, at date: Date = .now) -> String {
+        let focusedMinutes = WeeklyProgress.focusedMinutes(
+            taskID: taskID,
+            containing: date,
+            records: Array(state.completionRecords.values),
+            runningSessions: focus.runningSessions.map(\.record),
+            calendar: .current
+        )
+        let targetMinutes = weeklyCommitment(for: taskID)?.targetMinutes ?? 0
+        return "\(Self.durationLabel(minutes: focusedMinutes)) / \(Self.durationLabel(minutes: targetMinutes))"
+    }
+
+    private func tasks(in kind: TaskListKind) -> [TaskItem] {
+        state.tasks.values
+            .filter { taskListKind(for: $0) == kind }
+            .sorted { $0.createdAt < $1.createdAt }
+    }
+
+    private func roots(in kind: TaskListKind) -> [TaskItem] {
+        tasks(in: kind).filter { task in
+            guard let parentID = task.parentID,
+                  let parent = state.tasks[parentID] else {
+                return true
+            }
+            return taskListKind(for: parent) != kind
+        }
+    }
+
+    private static func durationLabel(minutes: Int) -> String {
+        let hours = max(0, minutes) / 60
+        let remainder = max(0, minutes) % 60
+        if hours == 0 { return "\(remainder)m" }
+        if remainder == 0 { return "\(hours)h" }
+        return "\(hours)h \(remainder)m"
+    }
+
     func createVault(at url: URL) async {
-        await perform {
+        let created = await perform {
             let (store, key) = try await VaultStore.create(repositoryURL: url, deviceID: self.deviceID)
             let vaultID = await store.vaultID
             try VaultKeyStore.save(key, vaultID: vaultID)
@@ -159,10 +232,13 @@ final class AppModel: ObservableObject {
             self.checkAutoStarts()
             self.writeWidgetProjection()
         }
+        if created {
+            await performTaskMaintenance(force: true)
+        }
     }
 
     func openVault(at url: URL, recoveryFile: URL? = nil) async {
-        await perform {
+        let opened = await perform {
             let manifestURL = url.appending(path: "vault/manifest.json")
             let manifest = try JSONDecoder.vaultDecoder.decode(VaultManifest.self, from: Data(contentsOf: manifestURL))
             var key = try VaultKeyStore.load(vaultID: manifest.vaultID)
@@ -186,6 +262,9 @@ final class AppModel: ObservableObject {
             self.checkAutoStarts()
             self.writeWidgetProjection()
         }
+        if opened {
+            await performTaskMaintenance(force: true)
+        }
     }
 
     func addTask(title: String, parentID: UUID? = nil) async {
@@ -198,14 +277,21 @@ final class AppModel: ObservableObject {
 
     func saveTask(_ task: TaskItem) async {
         var changed = task
+        if weeklyCommitment(for: changed.id) != nil {
+            changed.isCompleted = false
+            changed.completedAt = nil
+        }
         changed.updatedAt = .now
         await mutate(.upsertTask(changed))
     }
 
     func toggleTask(_ task: TaskItem) async {
+        guard weeklyCommitment(for: task.id) == nil else { return }
         var changed = task
         changed.isCompleted.toggle()
-        changed.updatedAt = .now
+        let now = Date.now
+        changed.updatedAt = now
+        changed.completedAt = changed.isCompleted ? now : nil
         var mutations: [VaultMutation] = [.upsertTask(changed)]
         let runningSessionIDs = focus.runningSessions
             .filter { $0.record.taskID == changed.id }
@@ -227,12 +313,10 @@ final class AppModel: ObservableObject {
     }
 
     func deleteTask(_ task: TaskItem) async {
-        for child in children(of: task.id) {
-            var reparented = child
-            reparented.parentID = task.parentID
-            await saveTask(reparented)
+        guard await mutate(taskDeletionMutations(taskIDs: [task.id], at: .now)) else { return }
+        for session in focus.runningSessions where session.record.taskID == task.id {
+            focus.stop(sessionID: session.id)
         }
-        await mutate(.deleteTask(task.id))
     }
 
     func weeklyCommitment(for taskID: UUID) -> WeeklyCommitment? {
@@ -240,17 +324,25 @@ final class AppModel: ObservableObject {
     }
 
     func saveWeeklyCommitment(taskID: UUID, targetMinutes: Int) async {
+        var mutations: [VaultMutation] = []
         if let existing = weeklyCommitment(for: taskID) {
             if targetMinutes <= 0 {
-                await mutate(.deleteWeeklyCommitment(existing.id))
+                mutations.append(.deleteWeeklyCommitment(existing.id))
             } else {
                 var changed = existing
                 changed.targetMinutes = targetMinutes
-                await mutate(.upsertWeeklyCommitment(changed))
+                mutations.append(.upsertWeeklyCommitment(changed))
             }
         } else if targetMinutes > 0 {
-            await mutate(.upsertWeeklyCommitment(.init(taskID: taskID, targetMinutes: targetMinutes)))
+            mutations.append(.upsertWeeklyCommitment(.init(taskID: taskID, targetMinutes: targetMinutes)))
         }
+        if targetMinutes > 0, var task = state.tasks[taskID], task.isCompleted || task.completedAt != nil {
+            task.isCompleted = false
+            task.completedAt = nil
+            task.updatedAt = .now
+            mutations.append(.upsertTask(task))
+        }
+        await mutate(mutations)
     }
 
     func approve(_ proposal: ProposedBlock) async {
@@ -420,12 +512,14 @@ final class AppModel: ObservableObject {
     }
 
     func sync() async {
-        await perform {
+        let synced = await perform {
             guard let vault = self.vault else { return }
             self.state = try await vault.sync()
-            await self.refreshPlan()
-            self.writeWidgetProjection()
         }
+        guard synced else { return }
+        await performTaskMaintenance(force: true)
+        await refreshPlan()
+        writeWidgetProjection()
     }
 
     func exportRecoveryKey(to url: URL) {
@@ -540,9 +634,75 @@ final class AppModel: ObservableObject {
     private func startScheduleTimer() {
         guard scheduleTimer == nil else { return }
         scheduleTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
-            Task { @MainActor in self?.checkAutoStarts() }
+            Task { @MainActor in
+                self?.checkAutoStarts()
+                await self?.performTaskMaintenance()
+            }
         }
         RunLoop.main.add(scheduleTimer!, forMode: .common)
+    }
+
+    private func performTaskMaintenance(at date: Date = .now, force: Bool = false) async {
+        guard vaultReady, !isPerformingTaskMaintenance else { return }
+        if !force, let nextTaskCleanupDate, date < nextTaskCleanupDate { return }
+        isPerformingTaskMaintenance = true
+        defer { isPerformingTaskMaintenance = false }
+
+        let recurringTaskIDs = Set(state.weeklyCommitments.values.map(\.taskID))
+        var mutations = state.tasks.values.compactMap { task -> VaultMutation? in
+            guard recurringTaskIDs.contains(task.id), task.isCompleted || task.completedAt != nil else {
+                return nil
+            }
+            var changed = task
+            changed.isCompleted = false
+            changed.completedAt = nil
+            changed.updatedAt = date
+            return .upsertTask(changed)
+        }
+        let expiredTaskIDs = Set(state.tasks.values.compactMap { task in
+            TaskRetentionPolicy.shouldDelete(
+                task,
+                hasWeeklyCommitment: recurringTaskIDs.contains(task.id),
+                at: date,
+                calendar: .current
+            ) ? task.id : nil
+        })
+        mutations.append(contentsOf: taskDeletionMutations(taskIDs: Array(expiredTaskIDs), at: date))
+
+        if mutations.isEmpty {
+            nextTaskCleanupDate = TaskRetentionPolicy.nextCleanupDate(after: date, calendar: .current)
+            return
+        }
+        let succeeded = await mutate(mutations)
+        nextTaskCleanupDate = succeeded
+            ? TaskRetentionPolicy.nextCleanupDate(after: date, calendar: .current)
+            : date.addingTimeInterval(60)
+    }
+
+    private func taskDeletionMutations(taskIDs: [UUID], at date: Date) -> [VaultMutation] {
+        let deletedIDs = Set(taskIDs)
+        guard !deletedIDs.isEmpty else { return [] }
+        var mutations: [VaultMutation] = []
+
+        for task in state.tasks.values where !deletedIDs.contains(task.id) {
+            guard task.parentID.map(deletedIDs.contains) == true else { continue }
+            var survivingParentID = task.parentID
+            while let parentID = survivingParentID, deletedIDs.contains(parentID) {
+                survivingParentID = state.tasks[parentID]?.parentID
+            }
+            var reparented = task
+            reparented.parentID = survivingParentID
+            reparented.updatedAt = date
+            mutations.append(.upsertTask(reparented))
+        }
+        mutations.append(contentsOf: state.approvedBlocks.values
+            .filter { block in block.taskID.map(deletedIDs.contains) == true }
+            .map { .deleteApprovedBlock($0.id) })
+        mutations.append(contentsOf: state.weeklyCommitments.values
+            .filter { deletedIDs.contains($0.taskID) }
+            .map { .deleteWeeklyCommitment($0.id) })
+        mutations.append(contentsOf: deletedIDs.map(VaultMutation.deleteTask))
+        return mutations
     }
 
     private func reconcileCalendarBlocks(

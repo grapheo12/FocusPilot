@@ -21,6 +21,78 @@ private func fixedCalendar() -> Calendar {
     #expect(FocusTiming.activeMinutes(fittingWallMinutes: 64, settings: settings) == 59)
 }
 
+@Test func weeklyProgressUsesMondayThroughSunday() throws {
+    let calendar = fixedCalendar()
+    let taskID = UUID()
+    let now = try #require(calendar.date(from: DateComponents(year: 2026, month: 10, day: 21, hour: 12)))
+    let previousSunday = try #require(calendar.date(from: DateComponents(year: 2026, month: 10, day: 18, hour: 12)))
+    let monday = try #require(calendar.date(from: DateComponents(year: 2026, month: 10, day: 19, hour: 12)))
+    let sunday = try #require(calendar.date(from: DateComponents(year: 2026, month: 10, day: 25, hour: 12)))
+    let nextMonday = try #require(calendar.date(from: DateComponents(year: 2026, month: 10, day: 26, hour: 12)))
+    let records = [
+        CompletionRecord(taskID: taskID, completedAt: previousSunday, activeMinutes: 10),
+        CompletionRecord(taskID: taskID, completedAt: monday, activeMinutes: 20),
+        CompletionRecord(taskID: taskID, completedAt: sunday, activeMinutes: 30),
+        CompletionRecord(taskID: taskID, completedAt: nextMonday, activeMinutes: 40)
+    ]
+
+    let minutes = WeeklyProgress.completedMinutes(
+        taskID: taskID,
+        containing: now,
+        records: records,
+        calendar: calendar
+    )
+
+    #expect(minutes == 50)
+}
+
+@Test func weeklyProgressIncludesRunningFocusTime() throws {
+    let calendar = fixedCalendar()
+    let taskID = UUID()
+    let now = try #require(calendar.date(from: DateComponents(year: 2026, month: 10, day: 21, hour: 12)))
+    let completed = CompletionRecord(taskID: taskID, completedAt: now, activeMinutes: 30)
+    let running = FocusSession(
+        taskID: taskID,
+        title: "Weekly project",
+        startedAt: now.addingTimeInterval(-120),
+        activeSeconds: 60
+    )
+
+    let minutes = WeeklyProgress.focusedMinutes(
+        taskID: taskID,
+        containing: now,
+        records: [completed],
+        runningSessions: [running],
+        calendar: calendar
+    )
+
+    #expect(minutes == 31)
+}
+
+@Test func metWeeklyCommitmentDoesNotGenerateMoreTaskTime() throws {
+    let calendar = fixedCalendar()
+    let now = try #require(calendar.date(from: DateComponents(year: 2026, month: 10, day: 21, hour: 8)))
+    let task = TaskItem(title: "Weekly project", estimatedMinutes: 30)
+    let commitment = WeeklyCommitment(taskID: task.id, targetMinutes: 120)
+    let completed = CompletionRecord(taskID: task.id, completedAt: now, activeMinutes: 120)
+
+    let result = TaskPlanner().generate(.init(
+        now: now,
+        days: 1,
+        calendar: calendar,
+        tasks: [task],
+        commitments: [commitment],
+        approvedBlocks: [],
+        completionRecords: [completed],
+        busyIntervals: [],
+        settings: .init(),
+        notificationSettings: .init()
+    ))
+
+    #expect(!result.proposals.contains { $0.taskID == task.id })
+    #expect(!result.unscheduledTaskIDs.contains(task.id))
+}
+
 @Test func proposesDeepThinkingBeforeFlexibleTasks() throws {
     let calendar = fixedCalendar()
     let now = try #require(calendar.date(from: DateComponents(year: 2026, month: 10, day: 19, hour: 8)))

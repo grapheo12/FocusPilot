@@ -17,12 +17,15 @@ FocusPilot is productivity software, not a diagnostic or medical tool.
 ### Tasks and projects
 
 - Create an arbitrarily deep hierarchy of tasks and subtasks.
-- Complete parent and child checkboxes independently.
+- Keep one-off work and positive weekly commitments in separate tasklists.
+- Complete one-off parent and child checkboxes independently.
+- Retain completed one-off tasks until the next local midnight, then delete them automatically.
 - Reparent children safely when deleting a parent task.
 - Add notes, priorities, active-time estimates, deadlines, and recurrence.
 - Repeat tasks daily or on weekdays.
-- Assign a persistent weekly hour target to long-running work.
-- Record focus sessions and completed active minutes.
+- Assign a persistent weekly hour target to long-running work without permanently completing it.
+- Show live focused time against each recurring task's target for the Monday–Sunday working week.
+- Record focus sessions and completed active minutes while excluding breaks and pauses.
 
 ### Calendar-aware planning
 

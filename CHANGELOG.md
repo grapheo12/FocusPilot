@@ -1,5 +1,34 @@
 # Changelog
 
+## Unreleased - 2026-10-22
+
+### Added
+
+- Split the Tasks pane into dedicated One-off Tasklist and Recurring Tasklist sections based on whether a task has a positive weekly commitment.
+- Added live Monday-through-Sunday focused-time totals for recurring tasks, displayed against each task's configured weekly target.
+- Added versioned task completion timestamps with backward-compatible decoding for existing encrypted vault operations and snapshots.
+- Added reusable working-week and completed-task retention policies with coverage for Monday boundaries, local-midnight cleanup, and legacy task data.
+
+### Changed
+
+- Removed completion checkboxes from recurring tasks so persistent weekly work cannot be permanently completed by mistake.
+- Promoted tasks to the root of their own section when their parent belongs to the other tasklist, while preserving the stored hierarchy relationship.
+- Automatically revive completed one-off tasks when a positive weekly commitment converts them into recurring tasks.
+- Stopped the planner from proposing additional recurring work after the current week's commitment has been met.
+- Preserved historical focus sessions and completion records when deleting task records so tracked work history remains available.
+
+### Fixed
+
+- Automatically delete completed one-off tasks after the next local midnight, including cleanup after vault opening, synchronization, app activation, and wake.
+- Reparent surviving descendants safely when completed parents are removed and clean up linked approved blocks and stale weekly commitments.
+- Prevent overlapping maintenance runs from emitting duplicate deletion operations around midnight.
+- Made the app and widget derive their shared App Group from the active Apple Developer team, allowing Personal Team provisioning profiles to sign both targets and share widget data correctly.
+
+### Validation
+
+- Added regression coverage for legacy JSON decoding, midnight retention, Monday-based weekly totals, live running-session totals, and fulfilled weekly commitments.
+- Verified all Swift package tests, a clean signed Release build, embedded widget validation, installed-bundle signatures, single widget registration, and a successful launch from `/Applications`.
+
 ## 1.0.1 - 2026-10-22
 
 ### Fixed
